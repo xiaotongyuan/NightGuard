@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NightGuard</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="top">
+    <h1>NightGuard</h1>
+    <p class="tag">human is the sensor · mosquito stays hidden</p>
+    <p id="clock" class="clock"></p>
+  </header>
+  <main class="cols">
+    <section class="col input" id="col-input">
+      <h2>Input</h2>
+      <div class="pane example">
+        <button type="button" id="btn-example">Start this example</button>
+        <ol class="example-steps">
+          <li>sigh shift</li>
+          <li>leave bed (+1 min)</li>
+          <li>Time → next night. Repeat the first two moves on night 2 and night 3.</li>
+          <li>Update tomorrow's rules</li>
+          <li>Next night: sigh shift is skipped. Then scratch left calf.</li>
+        </ol>
+        <p id="example-status" class="example-status" hidden></p>
+      </div>
+      <div class="pane night">
+        <h3 class="pane-title">Night replay</h3>
+        <div class="control-row">
+          <label class="field">Time
+            <select id="clock-mode">
+              <option value="" selected>this night</option>
+              <option value="new">new session</option>
+              <option value="reset">reset night</option>
+              <option value="next">next night</option>
+            </select>
+          </label>
+          <label class="field">Temperature
+            <select id="temp">
+              <option value="26.4">26.4 warm</option>
+              <option value="8">8 cold</option>
+            </select>
+          </label>
+        </div>
+        <h3>Next human move</h3>
+        <div id="choices" class="choices"></div>
+      </div>
+    </section>
+    <section class="col system" id="col-system">
+      <h2>System</h2>
+      <div id="llm-panel" class="pane llm dim">
+        <h3>LLM</h3>
+        <p id="llm-kind" class="muted">idle</p>
+        <p id="llm-remote" class="remote" hidden></p>
+        <div class="split">
+          <div class="json-side">
+            <p class="json-label">Input</p>
+            <pre id="llm-in"></pre>
+          </div>
+          <div class="json-side">
+            <p class="json-label">Output</p>
+            <pre id="llm-out"></pre>
+          </div>
+        </div>
+      </div>
+      <div class="system-lower">
+        <div class="pane rules">
+          <h3>Code-owned rules</h3>
+          <div class="cond-row">
+            <div class="cond-list">
+              <ul id="hard" class="hard"></ul>
+              <ul id="soft" class="soft"></ul>
+            </div>
+            <div id="lamp" class="lamp" aria-label="lamp">
+              <span class="lamp-dot"></span>
+              <span id="lamp-text">off</span>
+            </div>
+          </div>
+        </div>
+        <div class="pane day">
+          <h3 class="pane-title">Daytime updating</h3>
+          <p class="field">Feedback</p>
+          <div class="row-btns feedback">
+            <button type="button" id="fb-mosquito">mosquito</button>
+            <button type="button" id="fb-not">not mosquito</button>
+            <button type="button" id="fb-none" class="picked">no feedback</button>
+          </div>
+          <p class="hint">The LLM proposes a personal policy from outcomes and memory. Code accepts or refuses.</p>
+          <button type="button" id="btn-morning">Update tomorrow's rules</button>
+        </div>
+      </div>
+    </section>
+    <section class="col room" id="col-room">
+      <h2>Room</h2>
+      <div class="room-stage">
+        <div class="last-step">
+          <h3>Last step</h3>
+          <p class="step-line"><span class="field">What happened</span> <span id="step-kind">none</span></p>
+          <p class="step-line"><span class="field">Human move</span> <span id="step-move">none</span></p>
+          <p class="step-line"><span class="field">Correction</span> <span id="step-corr">none</span></p>
+        </div>
+        <svg id="room" viewBox="0 0 320 280" aria-label="room">
+        <rect id="wall-head" class="zone" x="48" y="18" width="224" height="36"/>
+        <rect id="wall-side" class="zone" x="16" y="54" width="32" height="176"/>
+        <rect id="wall-right" class="zone" x="272" y="54" width="32" height="176"/>
+        <rect id="floor-left" class="zone" x="48" y="230" width="112" height="32"/>
+        <rect id="floor-right" class="zone" x="160" y="230" width="112" height="32"/>
+        <rect class="frame" x="48" y="54" width="224" height="176" fill="none" stroke="currentColor"/>
+        <rect id="bed" x="110" y="118" width="100" height="52" rx="4"/>
+        <g id="person" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle id="person-head" cx="160" cy="104" r="10" fill="currentColor" stroke="none"/>
+          <line id="person-body" x1="160" y1="114" x2="160" y2="148"/>
+          <line id="person-arm-l" x1="160" y1="122" x2="148" y2="138"/>
+          <line id="person-arm-r" x1="160" y1="122" x2="172" y2="138"/>
+          <line id="person-leg-l" x1="160" y1="148" x2="150" y2="168"/>
+          <line id="person-leg-r" x1="160" y1="148" x2="170" y2="168"/>
+        </g>
+      </svg>
+      </div>
+      <div class="pane memory">
+        <h3 class="pane-title">Personal memory/Habits</h3>
+        <p id="habit" class="habit"></p>
+        <ul id="cards"></ul>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
