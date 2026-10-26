@@ -66,7 +66,7 @@ Trigger (demo, fixed, not conversational):
 
 - Not a wall cron, and not polled on every night beat.
 - One brief per night. Both must hold: the replay has ended (or the UI tapped Morning), **and** the watch window is closed. If the window is still open, finish Pass B under §4.2 first.
-- The replay clock hitting `07:00` for the first time is the same trigger, same conditions. Do not fire at 03:00 because “dawn is near.”
+- The page does not auto-fire at `07:00`. The operator taps **Update tomorrow's rules**. A loop helper may still close an open window at `07:00` before a brief; that is not a UI cron. Do not fire at 03:00 because “dawn is near.”
 - The three labels may be tapped before or after the brief. Untapped stays `morning_label=none`.
 
 **Review versus a new case is the scheduler’s job. Do not ask the LLM to choose.**
@@ -252,7 +252,7 @@ Five faces: `floor_left` / `floor_right` / `wall_head` / `wall_side` (left wall)
 
 ### 4.5 LLM parse and code overwrite
 
-Pure JSON, no markdown fences. Fail → retry once (retry counts toward the 6). Fail again: rule fallback, lamp off. Do not regex-scrape. UI marks `llm_parse_failed` (program state, not a model field).
+Pure JSON, no markdown fences. Fail → retry once (retry counts toward the 6). Fail again: rule fallback, lamp off. Do not regex-scrape. The snapshot marks `last_step.llm_parse_failed` (program state, not a model field).
 
 `llm.py` must **not** `return json.loads(response)`. After a successful parse, `sanitize_pass_a(event, parsed)` must run before the loop sees it. A successful retry uses the same function.
 

@@ -4,23 +4,33 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 
 from nightguard import ui_server
+from nightguard.ui_session import UiError
 
 
-def _get(base: str, path: str) -> tuple[int, dict]:
-    with urllib.request.urlopen(base + path, timeout=5) as response:
+def _headers(token: str | None = None) -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    if token is not None:
+        headers["X-Operator-Token"] = token
+    return headers
+
+
+def _get(base: str, path: str, token: str | None = None) -> tuple[int, dict]:
+    request = urllib.request.Request(base + path, headers=_headers(token), method="GET")
+    with urllib.request.urlopen(request, timeout=5) as response:
         return response.status, json.loads(response.read().decode("utf-8"))
 
 
-def _post(base: str, path: str, body: dict) -> tuple[int, dict]:
+def _post(base: str, path: str, body: dict, token: str | None = "solo") -> tuple[int, dict]:
     request = urllib.request.Request(
         base + path,
         data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=_headers(token),
         method="POST",
     )
     try:
@@ -34,6 +44,7 @@ def test_http_play_and_morning():
     saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
     ui_server._SESSION = None
     ui_server._LLM = None
+    ui_server.reset_operator()
     server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -64,6 +75,7 @@ def test_http_play_and_morning():
         server.server_close()
         ui_server._SESSION = saved_session
         ui_server._LLM = saved_llm
+        ui_server.reset_operator()
 
 
 def test_http_billing_falls_back_and_says_out_of_usage(monkeypatch):
@@ -91,6 +103,7 @@ def test_http_billing_falls_back_and_says_out_of_usage(monkeypatch):
     monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", raise_billing)
     saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
     ui_server._SESSION = None
+    ui_server.reset_operator()
     ui_server._LLM = RemoteLLM(
         provider="nemotron",
         api_key=key,
@@ -120,6 +133,7 @@ def test_http_billing_falls_back_and_says_out_of_usage(monkeypatch):
         server.server_close()
         ui_server._SESSION = saved_session
         ui_server._LLM = saved_llm
+        ui_server.reset_operator()
 
 
 def test_http_remote_outage_is_502_without_leaking_the_key(monkeypatch):
@@ -139,6 +153,7 @@ def test_http_remote_outage_is_502_without_leaking_the_key(monkeypatch):
     monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", raise_offline)
     saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
     ui_server._SESSION = None
+    ui_server.reset_operator()
     ui_server._LLM = RemoteLLM(
         provider="nemotron",
         api_key=key,
@@ -168,6 +183,224 @@ def test_http_remote_outage_is_502_without_leaking_the_key(monkeypatch):
         server.server_close()
         ui_server._SESSION = saved_session
         ui_server._LLM = saved_llm
+        ui_server.reset_operator()
+
+
+def test_http_second_client_watches_while_operator_is_active():
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, peek = _get(base, "/session", token="bob")
+        assert status == 200
+        assert peek["operator"] == {"held": False, "you": False, "seconds_left": 0}
+
+        status, opened = _post(base, "/play", {"choice_id": "open.scratch.left_calf"}, token="alice")
+        assert status == 200
+        assert opened["window"]["open"] is True
+        assert opened["operator"]["held"] is True
+        assert opened["operator"]["you"] is True
+        assert opened["operator"]["seconds_left"] > 0
+
+        for path, body in (
+            ("/play", {"choice_id": "follow.wait15"}),
+            ("/reset", {}),
+            ("/next-night", {}),
+            ("/morning", {"morning_label": "none"}),
+            ("/label", {"morning_label": "mosquito"}),
+            ("/ui", {"temp_c": 8}),
+            ("/session", {"mode": "continue"}),
+        ):
+            status, denied = _post(base, path, body, token="bob")
+            assert status == 429, path
+            assert denied == {"error": "busy"}
+
+        status, snap = _get(base, "/session", token="bob")
+        assert status == 200
+        assert snap["window"]["open"] is True
+        assert snap["last_step"]["kind"] == "pass_a"
+        assert snap["operator"]["held"] is True
+        assert snap["operator"]["you"] is False
+
+        status, waited = _post(base, "/play", {"choice_id": "follow.wait15"}, token="alice")
+        assert status == 200
+        assert waited["window"]["open"] is False
+        assert waited["last_step"]["kind"] == "pass_b"
+        assert waited["operator"]["you"] is True
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
+
+
+def test_http_expired_lease_lets_the_next_client_take_over():
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, opened = _post(base, "/play", {"choice_id": "open.scratch.left_calf"}, token="alice")
+        assert status == 200
+        assert opened["window"]["open"] is True
+
+        ui_server._OPERATOR_UNTIL = 0.0
+
+        status, waited = _post(base, "/play", {"choice_id": "follow.wait15"}, token="bob")
+        assert status == 200
+        assert waited["window"]["open"] is False
+        assert waited["operator"]["you"] is True
+
+        status, denied = _post(base, "/reset", {}, token="alice")
+        assert status == 429
+        assert denied == {"error": "busy"}
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
+
+
+def test_http_write_without_token_is_rejected():
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, denied = _post(base, "/play", {"choice_id": "open.scratch.left_calf"}, token=None)
+        assert status == 400
+        assert denied == {"error": "need_token"}
+        status, also = _post(base, "/play", {"choice_id": "open.scratch.left_calf"}, token="")
+        assert status == 400
+        assert also == {"error": "need_token"}
+        status, snap = _get(base, "/session")
+        assert status == 200
+        assert snap["last_step"]["kind"] == "none"
+        assert snap["operator"] == {"held": False, "you": False, "seconds_left": 0}
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
+
+
+def test_http_same_operator_refreshes_the_lease():
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, opened = _post(base, "/play", {"choice_id": "open.scratch.left_calf"}, token="alice")
+        assert status == 200
+        ui_server._OPERATOR_UNTIL = time.monotonic() + 2
+        status, waited = _post(base, "/play", {"choice_id": "follow.wait15"}, token="alice")
+        assert status == 200
+        assert waited["operator"]["you"] is True
+        assert waited["window"]["open"] is False
+        assert ui_server._OPERATOR_UNTIL > time.monotonic() + ui_server.LEASE_SEC - 1
+        status, denied = _post(base, "/reset", {}, token="bob")
+        assert status == 429
+        assert denied == {"error": "busy"}
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
+
+
+def test_http_short_lease_expires_without_forcing_the_clock(monkeypatch):
+    monkeypatch.setattr(ui_server, "LEASE_SEC", 0.05)
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, opened = _post(base, "/play", {"choice_id": "open.scratch.left_calf"}, token="alice")
+        assert status == 200
+        time.sleep(0.08)
+        status, waited = _post(base, "/play", {"choice_id": "follow.wait15"}, token="bob")
+        assert status == 200
+        assert waited["operator"]["you"] is True
+        assert waited["window"]["open"] is False
+        status, denied = _post(base, "/reset", {}, token="alice")
+        assert status == 429
+        assert denied == {"error": "busy"}
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
+
+
+def test_in_flight_write_blocks_takeover_even_if_lease_hits_zero():
+    ui_server.reset_operator()
+    try:
+        ui_server.claim_or_reject("alice")
+        ui_server._OPERATOR_UNTIL = 0.0
+        try:
+            ui_server.claim_or_reject("bob")
+            raise AssertionError("bob should stay busy while alice is in flight")
+        except UiError as exc:
+            assert exc.code == "busy"
+            assert exc.status == 429
+        assert ui_server._OPERATOR_TOKEN == "alice"
+    finally:
+        ui_server.finish_write()
+        ui_server.reset_operator()
+
+
+def test_http_bad_temp_is_400_not_llm_failed():
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, denied = _post(base, "/ui", {"temp_c": "abc"})
+        assert status == 400
+        assert denied == {"error": "bad_json"}
+        status, also = _post(base, "/session", {"mode": "continue", "temp_c": "abc"})
+        assert status == 400
+        assert also == {"error": "bad_json"}
+        status, snap = _get(base, "/session")
+        assert status == 200
+        assert snap["temp_c"] == 26.4
+        assert snap["last_step"]["kind"] == "none"
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
 
 
 def test_listen_addr_local(monkeypatch):

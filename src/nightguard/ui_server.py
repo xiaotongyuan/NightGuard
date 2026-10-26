@@ -5,15 +5,27 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from nightguard.ui_session import UiSession, UiError
+from nightguard.ui_session import UiError, UiSession, _as_temp
 
 HOST = "127.0.0.1"
 PORT = 8765
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
+LEASE_SEC = 180.0
+WRITE_PATHS = {
+    "/session",
+    "/play",
+    "/reset",
+    "/next-night",
+    "/morning",
+    "/label",
+    "/ui",
+}
 
 
 def listen_addr() -> tuple[str, int]:
@@ -24,6 +36,11 @@ def listen_addr() -> tuple[str, int]:
 
 _SESSION: UiSession | None = None
 _LLM = None
+_SEAT = threading.Lock()
+_WRITE = threading.Lock()
+_OPERATOR_TOKEN: str | None = None
+_OPERATOR_UNTIL = 0.0
+_IN_FLIGHT = 0
 
 
 def _make_session(
@@ -52,6 +69,73 @@ def replace_session(session: UiSession) -> UiSession:
     global _SESSION
     _SESSION = session
     return _SESSION
+
+
+def reset_operator() -> None:
+    global _OPERATOR_TOKEN, _OPERATOR_UNTIL, _IN_FLIGHT
+    with _SEAT:
+        _OPERATOR_TOKEN = None
+        _OPERATOR_UNTIL = 0.0
+        _IN_FLIGHT = 0
+
+
+def request_token(handler: BaseHTTPRequestHandler) -> str:
+    return (handler.headers.get("X-Operator-Token") or "").strip()[:64]
+
+
+def _clear_expired(now: float) -> None:
+    global _OPERATOR_TOKEN, _OPERATOR_UNTIL
+    if _IN_FLIGHT:
+        return
+    if _OPERATOR_TOKEN is not None and now >= _OPERATOR_UNTIL:
+        _OPERATOR_TOKEN = None
+        _OPERATOR_UNTIL = 0.0
+
+
+def operator_status(token: str) -> dict:
+    with _SEAT:
+        now = time.monotonic()
+        _clear_expired(now)
+        held = _OPERATOR_TOKEN is not None and (now < _OPERATOR_UNTIL or _IN_FLIGHT > 0)
+        you = held and bool(token) and token == _OPERATOR_TOKEN
+        left = max(0, int(_OPERATOR_UNTIL - now)) if held else 0
+        if held and left == 0 and _IN_FLIGHT:
+            left = 1
+    return {"held": held, "you": you, "seconds_left": left}
+
+
+def attach_operator(snap: dict, token: str) -> dict:
+    snap["operator"] = operator_status(token)
+    return snap
+
+
+def claim_or_reject(token: str) -> None:
+    """First writer takes the seat. Same token refreshes. Anyone else gets 429."""
+    global _OPERATOR_TOKEN, _OPERATOR_UNTIL, _IN_FLIGHT
+    if not token:
+        raise UiError("need_token", 400)
+    with _SEAT:
+        now = time.monotonic()
+        if _IN_FLIGHT and token != _OPERATOR_TOKEN:
+            raise UiError("busy", 429)
+        _clear_expired(now)
+        if _OPERATOR_TOKEN is None:
+            _OPERATOR_TOKEN = token
+            _OPERATOR_UNTIL = now + LEASE_SEC
+            _IN_FLIGHT += 1
+            return
+        if token == _OPERATOR_TOKEN:
+            _OPERATOR_UNTIL = now + LEASE_SEC
+            _IN_FLIGHT += 1
+            return
+        raise UiError("busy", 429)
+
+
+def finish_write() -> None:
+    global _IN_FLIGHT
+    with _SEAT:
+        if _IN_FLIGHT:
+            _IN_FLIGHT -= 1
 
 
 def _read_json(handler: BaseHTTPRequestHandler) -> dict:
@@ -103,51 +187,32 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/session":
-            self._send(200, current_session().snapshot())
+            token = request_token(self)
+            self._send(200, attach_operator(current_session().snapshot(), token))
             return
         self._static(path)
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        token = request_token(self)
         try:
+            if path not in WRITE_PATHS:
+                self._send(404, {"error": "not_found"})
+                return
             body = _read_json(self)
-            if path == "/session":
-                session = _make_session(
-                    mode=str(body.get("mode") or "continue"),
-                    temp_c=float(body.get("temp_c", 26.4)),
-                    pass_a_fixture=str(body.get("pass_a_fixture") or "default"),
-                    filter_text=str(body.get("filter_text") or "none"),
-                )
-                self._send(200, replace_session(session).snapshot())
-                return
-            session = current_session()
-            if path == "/play":
-                self._send(200, session.play(str(body.get("choice_id") or "")))
-                return
-            if path == "/reset":
-                self._send(200, session.reset_night())
-                return
-            if path == "/next-night":
-                self._send(200, session.next_night())
-                return
-            if path == "/morning":
-                script = body.get("script_filter_text")
-                self._send(
-                    200,
-                    session.morning(
-                        morning_label=str(body.get("morning_label") or "none"),
-                        script_filter_text=script if isinstance(script, str) else None,
-                    ),
-                )
-                return
-            if path == "/label":
-                self._send(200, session.label(str(body.get("morning_label") or "")))
-                return
-            if path == "/ui":
-                self._send(200, session.set_ui(body))
-                return
+            claim_or_reject(token)
+            try:
+                with _WRITE:
+                    snap = self._mutate(path, body)
+            finally:
+                finish_write()
+            self._send(200, attach_operator(snap, token))
+            return
         except UiError as exc:
             self._send_error_id(exc)
+            return
+        except (ValueError, TypeError):
+            self._send(400, {"error": "bad_json"})
             return
         except Exception as exc:
             import sys
@@ -157,7 +222,32 @@ class Handler(BaseHTTPRequestHandler):
             print(redact(f"llm_failed: {exc}", key), file=sys.stderr, flush=True)
             self._send(502, {"error": "llm_failed"})
             return
-        self._send(404, {"error": "not_found"})
+
+    def _mutate(self, path: str, body: dict) -> dict:
+        if path == "/session":
+            session = _make_session(
+                mode=str(body.get("mode") or "inspect"),
+                temp_c=_as_temp(body.get("temp_c", 26.4)),
+                pass_a_fixture=str(body.get("pass_a_fixture") or "default"),
+                filter_text=str(body.get("filter_text") or "none"),
+            )
+            return replace_session(session).snapshot()
+        session = current_session()
+        if path == "/play":
+            return session.play(str(body.get("choice_id") or ""))
+        if path == "/reset":
+            return session.reset_night()
+        if path == "/next-night":
+            return session.next_night()
+        if path == "/morning":
+            script = body.get("script_filter_text")
+            return session.morning(
+                morning_label=str(body.get("morning_label") or "none"),
+                script_filter_text=script if isinstance(script, str) else None,
+            )
+        if path == "/label":
+            return session.label(str(body.get("morning_label") or ""))
+        return session.set_ui(body)
 
 
 def main() -> None:
@@ -180,7 +270,7 @@ def main() -> None:
         if args.llm == "gemini":
             if not os.getenv("GEMINI_API_KEY"):
                 raise SystemExit("GEMINI_API_KEY missing")
-            model = args.model or os.getenv("GEMINI_MODEL") or "gemini-3.5-flash-lite"
+            model = args.model or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
             _LLM = RemoteLLM(provider="gemini", model=model)
         else:
             if not os.getenv("NEMOTRON_API_KEY"):

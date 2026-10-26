@@ -13,7 +13,7 @@ Default `127.0.0.1:8765`. Loopback only.
 
 ## 1. Session
 
-One browser tab = one `UiSession` = one `NightLoop`.
+One process = one shared room. `GET /session` is open. Writes send `X-Operator-Token`. One operator at a time.
 
 | Item | Default |
 | --- | --- |
@@ -32,7 +32,7 @@ In `inspect`, every **`open.*`** play first calls session `reset_night` (window,
 
 ## 2. Routes
 
-All `application/json`. Errors: `{"error": "<ascii id>"}`, HTTP 400/409. Never put an API key in a response.
+All `application/json`. Errors: `{"error": "<ascii id>"}`, HTTP 400/409/429. Never put an API key in a response. A second writer gets `429 busy`.
 
 | Method | Path | Job |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ No WebSocket. One click, one request.
 | --- | --- |
 | `mode` | `inspect` \| `continue` |
 | `temp_c` | Written onto every later Event |
-| `filter_text` | Pre-set accepted soft line; still runs `accept_filter_text` (illegal → `none`) |
+| `filter_text` | Pre-set soft line. Syntax only (`parse_filter_line`). Illegal lines drop to `none`. Cluster checks wait for a real morning `accept_filter_text` |
 | `pass_a_fixture` | Pin FakeLLM Pass A, §6. Omit for the current FakeLLM default |
 
 Morning FakeLLM: if yesterday already has a legal line, copy yesterday; if yesterday is `none` and a water clock habit exists, write `ignore ~01:55-02:15 motion sigh_shift`; if a `scratch_burst morning not_mosquito` habit exists, write `ignore motion scratch_burst`. Else `none`. `POST /morning` may still override once with `script_filter_text`.
@@ -99,7 +99,8 @@ Every write returns this object. The page draws only these keys. It does not inv
     "llm_kind": "none",
     "gate_hit": "none",
     "filter_hit": "none",
-    "correction": "none"
+    "correction": "none",
+    "llm_parse_failed": false
   },
   "llm": {"input": null, "output": null},
   "action": {"light": "off", "mode": "none", "brightness": "none", "duration_s": 0, "aim": "none"},
@@ -115,13 +116,14 @@ Every write returns this object. The page draws only these keys. It does not inv
     "soft": [{"line": "none", "hit": false}],
     "soft_diff": {"added": [], "removed": [], "kept": []}
   },
-  "memory": {
+    "memory": {
     "cards": [],
     "habit_text": "none",
     "uncertain_count": 0,
     "filter_text": "none"
   },
-  "morning": null
+  "morning": null,
+  "operator": {"held": false, "you": false, "seconds_left": 0}
 }
 ```
 
@@ -153,6 +155,7 @@ Derived from existing window fields. Not a new product state:
 | `label` | three keys |
 
 `llm_called` is true only for `pass_a` / `pass_b` / `morning`.  
+`llm_parse_failed` is true only when that step called the model and both parse attempts failed (fallback lamp). Program state, not a model field.  
 `llm.input` / `llm.output` are the **latest** LLM golden flat objects. Upgrade / follow / hard gate do not call the model and do not clear these panes; they are `null` only if this session has never called. The server drops `FORBIDDEN_LLM_KEYS` before send.
 
 ### 4.3 `enabled_choices`
@@ -249,6 +252,8 @@ On success: if `morning_label` is one of the three keys, stamp the night just en
 | `window_open` | `/morning` while the window is open |
 | `unknown_label` | three-key value is not one of those three words |
 | `bad_json` | body is not an object |
+| `busy` | another client holds the operator seat |
+| `need_token` | write without `X-Operator-Token` |
 
 Do not serve a stack as an error page. Do not read `.env` into the snapshot.
 

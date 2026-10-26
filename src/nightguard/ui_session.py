@@ -70,6 +70,13 @@ class UiError(Exception):
         super().__init__(code)
 
 
+def _as_temp(value: object) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise UiError("bad_json", 400) from exc
+
+
 def add_minutes(t: str, minutes: int) -> str:
     parts = t.split(":")
     h, m = int(parts[0]), int(parts[1])
@@ -198,7 +205,7 @@ class UiSession:
         if mode not in ("inspect", "continue"):
             mode = "inspect"
         self.mode = mode
-        self.temp_c = float(temp_c)
+        self.temp_c = _as_temp(temp_c)
         self.mosquito_draw = "none"
         self.t = "02:00:00"
         self.night_id = "n1"
@@ -211,6 +218,7 @@ class UiSession:
             "gate_hit": "none",
             "filter_hit": "none",
             "correction": "none",
+            "llm_parse_failed": False,
         }
         self.last_llm_input: dict | None = None
         self.last_llm_output: dict | None = None
@@ -252,6 +260,7 @@ class UiSession:
             "gate_hit": "none",
             "filter_hit": "none",
             "correction": "none",
+            "llm_parse_failed": False,
         }
         self.last_llm_input = None
         self.last_llm_output = None
@@ -276,6 +285,7 @@ class UiSession:
                 "gate_hit": "none",
                 "filter_hit": "none",
                 "correction": "none",
+                "llm_parse_failed": False,
             }
 
     def next_night(self) -> dict:
@@ -286,7 +296,7 @@ class UiSession:
         if "mosquito_draw" in body:
             self.mosquito_draw = str(body["mosquito_draw"] or "none")
         if "temp_c" in body:
-            self.temp_c = float(body["temp_c"])
+            self.temp_c = _as_temp(body["temp_c"])
         if body.get("mode") in ("inspect", "continue"):
             self.mode = body["mode"]
         return self.snapshot()
@@ -343,6 +353,7 @@ class UiSession:
             "gate_hit": "none",
             "filter_hit": "none",
             "correction": "none",
+            "llm_parse_failed": bool(self.loop.llm_parse_failed),
         }
         if self.loop.morning_done_night == closed_night:
             self._advance_night(keep_llm=True)
@@ -360,6 +371,7 @@ class UiSession:
             "gate_hit": "none",
             "filter_hit": "none",
             "correction": "none",
+            "llm_parse_failed": False,
         }
         return self.snapshot()
 
@@ -462,6 +474,7 @@ class UiSession:
             "gate_hit": gate_hit,
             "filter_hit": filter_hit,
             "correction": correction,
+            "llm_parse_failed": bool(llm_called and self.loop.llm_parse_failed),
         }
 
     def snapshot(self) -> dict:
@@ -502,9 +515,9 @@ class UiSession:
         else:
             soft = [{"line": ln, "hit": ln == self.last_step["filter_hit"]} for ln in _lines(filt)]
         self.llm_backend = backend_label(self.llm)
-        rendered, uncertain = render_memory_text(self.loop.memory.cards, current_event=None)
+        rendered, uncertain = render_memory_text(self.loop.memory.cards, current_event=None, filter_text=filt)
         habit = "\n".join(ln for ln in rendered.splitlines() if ln.startswith("habit:")) or "none"
-        cards = [render_card_line(c) for c in recent_high_weight_cards(self.loop.memory.cards)]
+        cards = [render_card_line(c) for c in recent_high_weight_cards(self.loop.memory.cards, filt)]
         return {
             "mode": self.mode,
             "llm_backend": self.llm_backend,

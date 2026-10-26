@@ -49,6 +49,7 @@ Local: `127.0.0.1:8765`. Space: listen `0.0.0.0:$PORT` (7860). Judges open `http
 | Default inference | FakeLLM. Dockerfile starts `--llm fake` |
 | Refresh | `GET` the current room. Do not `POST /session` on every open |
 | Reset | **Start this example** is the only full-room reset |
+| Seat | One operator. Writes send `X-Operator-Token`. A second writer gets `429 busy` and can only watch. Idle 3 minutes releases the seat |
 | Backend label | `fake` on this Space |
 | Do not | one session per visitor, visitor-supplied keys, port-forward, ngrok as the demo URL |
 

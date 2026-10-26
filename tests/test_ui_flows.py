@@ -35,6 +35,7 @@ PHASES = {"closed", "watch", "upgraded"}
 def assert_snapshot_legal(snap: dict) -> None:
     assert snap["window"]["phase"] in PHASES
     assert snap["last_step"]["kind"] in STEP_KINDS
+    assert isinstance(snap["last_step"]["llm_parse_failed"], bool)
     assert snap["action"]["light"] in LIGHTS
     assert snap["action"]["mode"] in MODES
     assert snap["action"]["brightness"] in BRIGHTNESSES

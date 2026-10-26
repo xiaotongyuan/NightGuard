@@ -20,6 +20,9 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .top h1 { margin: 0; font-size: 20px; letter-spacing: 0.04em; }
 .tag, .clock, .muted { color: var(--muted); margin: 2px 0 8px; }
 .clock.usage-out { color: var(--warn); }
+.seat { color: var(--muted); margin: 0 0 8px; }
+.seat.watch { color: var(--warn); }
+.seat:empty { display: none; }
 .example-steps { margin: 0 0 8px; padding-left: 1.2em; color: var(--muted); }
 .example-steps li { margin: 3px 0; }
 .example-steps li.current { color: var(--warn); font-weight: 700; }

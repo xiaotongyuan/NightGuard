@@ -200,6 +200,12 @@ Remote: `NIGHTGUARD_REMOTE=1 pytest tests/test_remote.py -m remote` (at most 3 H
 | A3 | local | error text has no API key |
 | A6 | local | fake HTTP 500 and a dead network. 500 becomes a key-free `RuntimeError`; dead network stays `URLError`. No real vendor |
 | H1 | local HTTP | dead network: `/play` returns 502 `llm_failed`; that response and the next `/session` have no key; window did not open |
+| H2 | local HTTP | while the operator seat is held, a second token’s writes are `429 busy`; `GET /session` still shows the current room |
+| H3 | local HTTP | after the lease expires, a second token can take over; the old operator’s next write is `429 busy` |
+| H4 | local HTTP | write without a token → `400 need_token`; room unchanged |
+| H5 | local HTTP | the same operator writing again refreshes the lease and is not kicked |
+| H6 | local HTTP | with a short `LEASE_SEC`, the next token takes over after real expiry |
+| H7 | local HTTP | a non-numeric `temp_c` is `400 bad_json`, not `502 llm_failed`; room temperature stays |
 | R1 | remote Gemini | same Pass A input, parseable flat JSON |
 | R2 | remote Gemini | `no_new_event` → `verdict=inconclusive` (the only pinned verdict on a live model) |
 | R3 | remote Gemini | no `peak_hz`, coordinates, `n_mosquitoes` |

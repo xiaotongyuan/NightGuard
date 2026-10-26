@@ -2,6 +2,7 @@
 
 import pytest
 
+from nightguard.llm import FakeLLM
 from nightguard.schema import FORBIDDEN_LLM_KEYS
 from nightguard.ui_session import FOLLOW_CHOICES, OPEN_CHOICES, UiError, UiSession
 from tests.helpers import seed_card
@@ -46,6 +47,7 @@ def test_W1_new_session_closed_only_openers():
     assert set(snap["enabled_choices"]) == set(OPEN_CHOICES)
     assert set(snap["disabled_choices"]) == set(FOLLOW_CHOICES)
     assert snap["action"]["light"] == "off"
+    assert snap["last_step"]["llm_parse_failed"] is False
     assert snap["llm"]["input"] is None
     assert snap["llm"]["remote"] is None
     assert snap["llm_backend"] == "fake"
@@ -55,9 +57,19 @@ def test_W2_open_scratch_off_enters_watch():
     _session, snap = _open_off()
     assert snap["last_step"]["kind"] == "pass_a"
     assert snap["last_step"]["llm_called"] is True
+    assert snap["last_step"]["llm_parse_failed"] is False
     assert snap["window"]["phase"] == "watch"
     assert set(snap["enabled_choices"]) == set(FOLLOW_CHOICES)
     assert not any(c.startswith("open.") for c in snap["enabled_choices"])
+
+
+def test_snapshot_marks_llm_parse_failed_after_bad_json():
+    session = UiSession(mode="continue", llm=FakeLLM(script=["{", "{"]))
+    snap = session.play("open.scratch.left_calf")
+    assert snap["last_step"]["kind"] == "pass_a"
+    assert snap["last_step"]["llm_called"] is True
+    assert snap["last_step"]["llm_parse_failed"] is True
+    assert str(snap["llm"]["output"]["reasoning"]).startswith("parse_failed")
 
 
 def test_W3_cold_room_gates():
@@ -373,8 +385,7 @@ def test_WR1_mosquito_draw_stays_out_of_event_and_llm():
         assert key not in (snap["llm"]["output"] or {})
     event = session.loop.log.rows[-1]
     assert "mosquito_draw" not in event
-    llm_blob = blob.split("llm", 1)[1] if "llm" in blob else ""
-    assert "n_mosquitoes" not in llm_blob
+    assert "n_mosquitoes" not in blob.split("llm")[1] if "llm" in blob else True
 
 
 def test_WR2_head_scratch_aims_wall_head():

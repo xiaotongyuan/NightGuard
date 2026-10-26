@@ -14,6 +14,17 @@ Public Hugging Face Docker Space. Same three-pane page. Backend is **fake** (scr
 
 Host notes: [docs/deployment.md](docs/deployment.md).
 
+### One operator, everyone else watches
+
+The hosted page is **one shared room**, not one night per visitor.
+
+- The first person who clicks takes the controls. The page says `You have the controls.`
+- A second, third, or fourth visitor can only watch. Buttons stay grey. The page says `Someone else is operating. You can watch.` and refreshes the room every few seconds.
+- Closing the tab does **not** hand the seat over. The lease lasts **3 idle minutes** after the last write. Then the next person who clicks takes over. The others stay watchers.
+- Two tabs in the same browser share one token, so both can click. To see two people, open a normal window and an incognito window (or Chrome and Edge).
+
+Writes from a second client return `429 busy`. `GET /session` stays open. Tests: `H2` / `H3` in `tests/test_ui_http.py`.
+
 ## Why a model at all
 
 The same 2 a.m. motion can be a bathroom trip or a real itch. A script cannot tell them apart. What *can* be written as code already is:
@@ -35,8 +46,8 @@ human event
          record the follow-up
          wait / code-upgrade the lamp once / close and run Pass B
     → if the window is closed
-         hard gates
-         → accepted personal filter
+         hard gates first (cold room, already up, leave-bed, budget)
+         → only if a gate did not fire: accepted personal filter
          → else Pass A (belief + lamp mode)
          → open the watch window
 ```

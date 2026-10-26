@@ -25,7 +25,7 @@ const KIND_WORDS = {
   follow: "still watching",
   upgrade: "second lamp on",
   pass_b: "window closed",
-  morning: "morning update",
+  morning_label: "morning update",
   label: "human feedback",
 };
 const CORR_WORDS = {
@@ -42,9 +42,30 @@ const HARD_RULE_WORDS = {
 };
 
 const HL = new Set(["belief_state", "reasoning", "verdict", "reason"]);
+const ERRORS = {
+  busy: "Someone else is operating. You can watch.",
+};
 let feedback = "none";
 let busy = false;
 let exampleOn = false;
+let watchTimer = null;
+
+function operatorToken() {
+  const key = "nightguard.operator";
+  try {
+    let token = localStorage.getItem(key);
+    if (!token) {
+      token = crypto.randomUUID();
+      localStorage.setItem(key, token);
+    }
+    return token;
+  } catch (_) {
+    if (!window.__nightguardToken) {
+      window.__nightguardToken = crypto.randomUUID();
+    }
+    return window.__nightguardToken;
+  }
+}
 
 function setBusy(on, text) {
   busy = on;
@@ -58,12 +79,15 @@ function setBusy(on, text) {
 async function api(path, method, body) {
   const res = await fetch(path, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Operator-Token": operatorToken(),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.error || res.status);
+    throw new Error(ERRORS[data.error] || data.error || res.status);
   }
   return data;
 }
@@ -124,7 +148,7 @@ function render(snap) {
   panel.classList.toggle("dim", !llmOn);
   const stepKind = snap.last_step.kind;
   document.getElementById("llm-kind").textContent = llmOn
-    ? `${snap.last_step.llm_kind} · called`
+    ? `${snap.last_step.llm_kind} · called${snap.last_step.llm_parse_failed ? " · parse failed" : ""}`
     : stepKind === "filtered"
       ? "personal rule · model not called"
       : `${stepKind} · no LLM`;
@@ -200,6 +224,33 @@ function render(snap) {
   document.getElementById("btn-morning").disabled = snap.window.open;
   paintFeedback();
   paintExample(snap);
+  applySeat(snap);
+}
+
+function applySeat(snap) {
+  const seat = snap.operator || { held: false, you: false, seconds_left: 0 };
+  const watching = Boolean(seat.held && !seat.you);
+  const el = document.getElementById("seat");
+  el.className = watching ? "seat watch" : "seat";
+  if (watching) {
+    el.textContent = "Someone else is operating. You can watch.";
+    for (const node of document.querySelectorAll("button, select")) {
+      node.disabled = true;
+    }
+  } else if (seat.you) {
+    el.textContent = "You have the controls.";
+  } else {
+    el.textContent = "";
+  }
+  if (watching && !watchTimer) {
+    watchTimer = setInterval(() => {
+      loadRoom().catch(() => {});
+    }, 2500);
+  }
+  if (!watching && watchTimer) {
+    clearInterval(watchTimer);
+    watchTimer = null;
+  }
 }
 
 function exampleCue(snap) {
@@ -222,7 +273,7 @@ function exampleCue(snap) {
     return { text: "Next: Time → next night", select: true, step: 2 };
   }
   if (kind === "pass_b" && night === 3) {
-    return { text: "Next: Update tomorrow's rules", morning: true, step: 3 };
+    return { text: "Next: Update tomorrow's rules", morning_label: true, step: 3 };
   }
   return { text: "Next: sigh shift", choice: "open.sigh.torso", step: 0 };
 }

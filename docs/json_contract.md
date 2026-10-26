@@ -375,7 +375,7 @@ Pass A rule fallback:
 }
 ```
 
-The UI also marks `llm_parse_failed=true` (program state, not a model field).
+The snapshot marks `last_step.llm_parse_failed=true`, and the LLM pane says `parse failed` (program state, not a model field).
 
 ---
 

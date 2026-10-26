@@ -124,7 +124,13 @@ Oracles come only from FakeLLM and code gates. No network.
 
 ---
 
-## 7. Out of scope
+## 7. Shared room
+
+One process, one room. Writes need `X-Operator-Token`. A second writer is `429 busy`. Idle 3 minutes releases the seat. Closing a tab does not. HTTP cases: `H2`–`H6` in `docs/testplan.md` / `tests/test_ui_http.py`.
+
+---
+
+## 8. Out of scope
 
 - Replacing §2 `UiSession` tests with browser clicks
 - Default pytest opening the page to hit Gemini
