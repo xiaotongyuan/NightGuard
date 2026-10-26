@@ -157,7 +157,12 @@ def morning_habit_motions(cards: list[dict], label: str = "not_mosquito") -> set
     return {motion for motion, n in counts.items() if n >= HABIT_MIN_COUNT}
 
 
-def recent_high_weight_cards(cards: list[dict]) -> list[dict]:
+def recent_high_weight_cards(
+    cards: list[dict],
+    filter_text: str = "none",
+) -> list[dict]:
+    # filter_text is accepted for call-site compat. Cards stay weight + recency only.
+    del filter_text
     visible = high_weight_cards(cards)
     return sorted(
         visible,
@@ -169,8 +174,10 @@ def recent_high_weight_cards(cards: list[dict]) -> list[dict]:
 def render_memory_text(
     cards: list[dict],
     current_event: dict | None = None,
+    filter_text: str = "none",
 ) -> tuple[str, int]:
-    recent = recent_high_weight_cards(cards)
+    # filter_text is accepted for call-site compat. Not used to hide cards.
+    recent = recent_high_weight_cards(cards, filter_text)
     card_lines = [render_card_line(c) for c in recent]
     habit_lines = clock_habit_lines(clock_clusters(cards), current_event)
     habit_lines.extend(morning_habit_lines(cards))

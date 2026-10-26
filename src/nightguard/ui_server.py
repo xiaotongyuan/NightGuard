@@ -100,7 +100,7 @@ def operator_status(token: str) -> dict:
         you = held and bool(token) and token == _OPERATOR_TOKEN
         left = max(0, int(_OPERATOR_UNTIL - now)) if held else 0
         if held and left == 0 and _IN_FLIGHT:
-            left = 1
+            left = 1  # keep watcher UI while a write is still in flight
     return {"held": held, "you": you, "seconds_left": left}
 
 
@@ -270,7 +270,7 @@ def main() -> None:
         if args.llm == "gemini":
             if not os.getenv("GEMINI_API_KEY"):
                 raise SystemExit("GEMINI_API_KEY missing")
-            model = args.model or os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"
+            model = args.model or os.getenv("GEMINI_MODEL") or "gemini-3.5-flash-lite"
             _LLM = RemoteLLM(provider="gemini", model=model)
         else:
             if not os.getenv("NEMOTRON_API_KEY"):

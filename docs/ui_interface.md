@@ -65,7 +65,7 @@ No WebSocket. One click, one request.
 | `mode` | `inspect` \| `continue` |
 | `temp_c` | Written onto every later Event |
 | `filter_text` | Pre-set soft line. Syntax only (`parse_filter_line`). Illegal lines drop to `none`. Cluster checks wait for a real morning `accept_filter_text` |
-| `pass_a_fixture` | Pin FakeLLM Pass A, §6. Omit for the current FakeLLM default |
+| `pass_a_fixture` | Pin FakeLLM Pass A, §6. Omit for the current FakeLLM default. Ignored when the process is running a real model |
 
 Morning FakeLLM: if yesterday already has a legal line, copy yesterday; if yesterday is `none` and a water clock habit exists, write `ignore ~01:55-02:15 motion sigh_shift`; if a `scratch_burst morning not_mosquito` habit exists, write `ignore motion scratch_burst`. Else `none`. `POST /morning` may still override once with `script_filter_text`.
 
@@ -116,7 +116,7 @@ Every write returns this object. The page draws only these keys. It does not inv
     "soft": [{"line": "none", "hit": false}],
     "soft_diff": {"added": [], "removed": [], "kept": []}
   },
-    "memory": {
+  "memory": {
     "cards": [],
     "habit_text": "none",
     "uncertain_count": 0,

@@ -82,6 +82,7 @@ class NightLoop:
         memory_text, uncertain = render_memory_text(
             self.memory.cards,
             current_event=event,
+            filter_text=self.filter_text,
         )
         payload = prompts.pass_a_input(event, memory_text, uncertain, active_filter)
         self.pass_a_payloads.append(payload)

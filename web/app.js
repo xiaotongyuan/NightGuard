@@ -17,6 +17,7 @@ const LABELS = {
   "follow.wait15": "wait 15 min, no new motion",
 };
 
+// Keys must match last_step.kind. morning_label is a field, not a kind.
 const KIND_WORDS = {
   none: "none",
   gated: "blocked by a hard rule",
@@ -25,7 +26,7 @@ const KIND_WORDS = {
   follow: "still watching",
   upgrade: "second lamp on",
   pass_b: "window closed",
-  morning_label: "morning update",
+  morning: "morning update",
   label: "human feedback",
 };
 const CORR_WORDS = {
@@ -273,7 +274,7 @@ function exampleCue(snap) {
     return { text: "Next: Time → next night", select: true, step: 2 };
   }
   if (kind === "pass_b" && night === 3) {
-    return { text: "Next: Update tomorrow's rules", morning_label: true, step: 3 };
+    return { text: "Next: Update tomorrow's rules", morning: true, step: 3 };
   }
   return { text: "Next: sigh shift", choice: "open.sigh.torso", step: 0 };
 }
