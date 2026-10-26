@@ -312,7 +312,11 @@ async function play(choiceId) {
   }
 }
 
-async function boot() {
+async function loadRoom() {
+  render(await api("/session", "GET"));
+}
+
+async function newSession() {
   feedback = "none";
   const temp = Number(document.getElementById("temp").value);
   render(await api("/session", "POST", {
@@ -325,7 +329,7 @@ document.getElementById("clock-mode").addEventListener("change", async (ev) => {
   const cmd = ev.target.value;
   ev.target.value = "";
   if (cmd === "new") {
-    await boot();
+    await newSession();
   } else if (cmd === "reset") {
     render(await api("/reset", "POST", {}));
   } else if (cmd === "next") {
@@ -374,6 +378,6 @@ document.getElementById("btn-example").addEventListener("click", async () => {
   }
 });
 
-boot().catch((err) => {
+loadRoom().catch((err) => {
   document.getElementById("step-kind").textContent = String(err);
 });

@@ -15,6 +15,13 @@ HOST = "127.0.0.1"
 PORT = 8765
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 
+
+def listen_addr() -> tuple[str, int]:
+    """Loopback at home. 0.0.0.0 and $PORT on Hugging Face Docker Spaces."""
+    if os.getenv("SPACE_ID") or os.getenv("SPACE_HOST") or os.getenv("PORT"):
+        return "0.0.0.0", int(os.getenv("PORT") or "7860")
+    return HOST, PORT
+
 _SESSION: UiSession | None = None
 _LLM = None
 
@@ -181,8 +188,9 @@ def main() -> None:
             model = args.model or os.getenv("NEMOTRON_MODEL") or "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
             _LLM = RemoteLLM(provider="nemotron", model=model)
         label = backend_label(_LLM)
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"NightGuard UI  http://{HOST}:{PORT}/  llm={label}", flush=True)
+    host, port = listen_addr()
+    server = ThreadingHTTPServer((host, port), Handler)
+    print(f"NightGuard UI  http://{host}:{port}/  llm={label}", flush=True)
     server.serve_forever()
 
 

@@ -10,11 +10,9 @@ Hackathon track: **Best Apps and Agents** (Nebius × NVIDIA). Runtime proof uses
 
 ## Live demo
 
-Hugging Face Docker Space (same three-pane page as local):
+Public Hugging Face Docker Space. Same three-pane page. Backend is **fake** (scripted FakeLLM). That is not “out of usage.” `out of usage` only appears after a refused Token Factory bill. The video is the Nebius proof.
 
-**https://huggingface.co/spaces/OWNER/NightGuard**
-
-Replace `OWNER` after the Space is up. One shared night. Default inference is FakeLLM; a live Nemotron call is optional and rate-limited. Secrets stay in the Space, not in this repo. Host notes: [docs/deployment.md](docs/deployment.md).
+Host notes: [docs/deployment.md](docs/deployment.md).
 
 ## Why a model at all
 

@@ -168,3 +168,16 @@ def test_http_remote_outage_is_502_without_leaking_the_key(monkeypatch):
         server.server_close()
         ui_server._SESSION = saved_session
         ui_server._LLM = saved_llm
+
+
+def test_listen_addr_local(monkeypatch):
+    monkeypatch.delenv("SPACE_ID", raising=False)
+    monkeypatch.delenv("SPACE_HOST", raising=False)
+    monkeypatch.delenv("PORT", raising=False)
+    assert ui_server.listen_addr() == ("127.0.0.1", 8765)
+
+
+def test_listen_addr_space(monkeypatch):
+    monkeypatch.setenv("SPACE_ID", "user/NightGuard")
+    monkeypatch.setenv("PORT", "7860")
+    assert ui_server.listen_addr() == ("0.0.0.0", 7860)

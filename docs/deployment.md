@@ -36,24 +36,32 @@ The page is `python -m nightguard.ui_server` plus `web/`, not Gradio or Streamli
 
 | Host | Fits |
 | --- | --- |
-| **Docker Space** (Hugging Face) | Yes. Same HTTP service, same three panes |
+| **Docker Space** (Hugging Face) | Yes. Same HTTP service, same three panes. Free CPU is enough. |
 | Gradio / Streamlit Space | Yes, but wraps and reskins the page |
 | Static HTML Space | No. No Python backend |
 
-Secrets (`NEMOTRON_API_KEY` and Token Factory URL / model) live in the host secret store, not in git.
+A public Space uses **FakeLLM**. Page Backend says `fake`. That is the scripted night, not a billing error. `out of usage` is only for a refused Token Factory call. This Space does not call Token Factory and needs no Secrets.
 
-A public room is **one shared night**, not one model stream per visitor.
+Local: `127.0.0.1:8765`. Space: listen `0.0.0.0:$PORT` (7860). Judges open `https://huggingface.co/spaces/<user>/NightGuard`.
 
 | Item | Decision |
 | --- | --- |
-| Default inference | FakeLLM for scratches, sits, leaves, first judgment, and 15-minute review |
-| Live call | Optional, rate-limited. Prefer morning **Update tomorrow's rules** only |
+| Default inference | FakeLLM. Dockerfile starts `--llm fake` |
 | Refresh | `GET` the current room. Do not `POST /session` on every open |
 | Reset | **Start this example** is the only full-room reset |
-| Backend label | `fake`, `nano`, or `out of usage` |
-| Do not | one session per visitor, visitor-supplied keys, WebSockets, port-forward, ngrok as the demo URL |
+| Backend label | `fake` on this Space |
+| Do not | one session per visitor, visitor-supplied keys, port-forward, ngrok as the demo URL |
 
 Do not put an API key in the page, the repo, or response JSON.
+
+### Hugging Face (free Docker Space)
+
+1. Push this repo (including `Dockerfile`) to GitHub.
+2. huggingface.co → **New Space**.
+3. SDK: **Docker**. Hardware: **CPU basic** (free). Visibility: **Public**.
+4. Create from the GitHub repo, or empty Space then point it at this repo.
+5. No Secrets. Wait for the build log: `NightGuard UI  http://0.0.0.0:7860/  llm=fake`.
+6. Put the Space URL on Devpost and in this README.
 
 ---
 
