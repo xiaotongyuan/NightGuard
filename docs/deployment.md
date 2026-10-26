@@ -32,37 +32,39 @@ If Token Factory returns a billing refusal (HTTP 402, `insufficient_quota`, bala
 
 ## Hosted demo
 
-The page is `python -m nightguard.ui_server` plus `web/`, not Gradio or Streamlit.
+The page is `python -m nightguard.ui_server` plus `web/`, not Gradio or Streamlit. Hugging Face now charges to **create** Docker and Gradio Spaces. Static Spaces cannot run Python. The public demo is a **Render** free web service: same HTTP page, no reskin, no credit card.
 
 | Host | Fits |
 | --- | --- |
-| **Docker Space** (Hugging Face) | Yes. Same HTTP service, same three panes. Free CPU is enough. |
-| Gradio / Streamlit Space | Yes, but wraps and reskins the page |
-| Static HTML Space | No. No Python backend |
+| **Render free web service** | Yes. `render.yaml` starts `--llm fake` on `0.0.0.0:$PORT` |
+| Hugging Face Docker / Gradio | Paid to create as of 2026-10. Skip |
+| Hugging Face Static | No. No Python backend |
 
-A public Space uses **FakeLLM**. Page Backend says `fake`. That is the scripted night, not a billing error. `out of usage` is only for a refused Token Factory call. This Space does not call Token Factory and needs no Secrets.
+A public host uses **FakeLLM**. Page Backend says `fake`. That is the scripted night, not a billing error. `out of usage` is only for a refused Token Factory call. This demo does not call Token Factory and needs no Secrets.
 
-Local: `127.0.0.1:8765`. Space: listen `0.0.0.0:$PORT` (7860). Judges open `https://huggingface.co/spaces/<user>/NightGuard`.
+Local: `127.0.0.1:8765`. Hosted: listen `0.0.0.0:$PORT` (Render injects `PORT`). Judges open `https://<name>.onrender.com/`.
+
+The free instance sleeps after about 15 idle minutes. The first open can take about a minute.
 
 | Item | Decision |
 | --- | --- |
-| Default inference | FakeLLM. Dockerfile starts `--llm fake` |
+| Default inference | FakeLLM. `render.yaml` starts `--llm fake` |
 | Refresh | `GET` the current room. Do not `POST /session` on every open |
 | Reset | **Start this example** is the only full-room reset |
 | Seat | One operator. Writes send `X-Operator-Token`. A second writer gets `429 busy` and can only watch. Idle 3 minutes releases the seat |
-| Backend label | `fake` on this Space |
+| Backend label | `fake` on this host |
 | Do not | one session per visitor, visitor-supplied keys, port-forward, ngrok as the demo URL |
 
 Do not put an API key in the page, the repo, or response JSON.
 
-### Hugging Face (free Docker Space)
+### Render (free web service)
 
-1. Push this repo (including `Dockerfile`) to GitHub.
-2. huggingface.co → **New Space**.
-3. SDK: **Docker**. Hardware: **CPU basic** (free). Visibility: **Public**.
-4. Create from the GitHub repo, or empty Space then point it at this repo.
-5. No Secrets. Wait for the build log: `NightGuard UI  http://0.0.0.0:7860/  llm=fake`.
-6. Put the Space URL on Devpost and in this README.
+1. Push this repo (including `render.yaml`) to GitHub.
+2. [render.com](https://render.com) → sign in with GitHub. No card.
+3. **New → Blueprint**, pick `xiaotongyuan/NightGuard`. Or **New → Web Service** on the same repo; Render reads `render.yaml`.
+4. Plan: **Free**. Do not set `PORT`.
+5. Wait for the log: `NightGuard UI  http://0.0.0.0:<port>/  llm=fake`.
+6. Put the `https://<name>.onrender.com/` URL on Devpost and in this README.
 
 ---
 

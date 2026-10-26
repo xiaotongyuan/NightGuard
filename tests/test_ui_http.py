@@ -414,3 +414,10 @@ def test_listen_addr_space(monkeypatch):
     monkeypatch.setenv("SPACE_ID", "user/NightGuard")
     monkeypatch.setenv("PORT", "7860")
     assert ui_server.listen_addr() == ("0.0.0.0", 7860)
+
+
+def test_listen_addr_port_only(monkeypatch):
+    monkeypatch.delenv("SPACE_ID", raising=False)
+    monkeypatch.delenv("SPACE_HOST", raising=False)
+    monkeypatch.setenv("PORT", "10000")
+    assert ui_server.listen_addr() == ("0.0.0.0", 10000)

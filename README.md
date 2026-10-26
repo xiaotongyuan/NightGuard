@@ -1,13 +1,3 @@
----
-title: NightGuard
-emoji: 🛏️
-colorFrom: yellow
-colorTo: gray
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # NightGuard
 
 Mosquito as a hidden variable. The human is the sensor.
@@ -20,9 +10,9 @@ Hackathon track: **Best Apps and Agents** (Nebius × NVIDIA). Runtime proof uses
 
 ## Live demo
 
-Public Hugging Face Docker Space. Same three-pane page. Backend is **fake** (scripted FakeLLM). That is not “out of usage.” `out of usage` only appears after a refused Token Factory bill. The video is the Nebius proof.
+Public Render URL goes here after the first deploy (`https://<name>.onrender.com/`). Same three-pane page. Backend is **fake** (scripted FakeLLM). That is not “out of usage.” `out of usage` only appears after a refused Token Factory bill. The video is the Nebius proof.
 
-Host notes: [docs/deployment.md](docs/deployment.md).
+Hugging Face Docker and Gradio Spaces now require a paid plan to create. This demo uses a free Render web service. Host notes: [docs/deployment.md](docs/deployment.md).
 
 ### One operator, everyone else watches
 

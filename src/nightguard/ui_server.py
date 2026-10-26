@@ -29,7 +29,7 @@ WRITE_PATHS = {
 
 
 def listen_addr() -> tuple[str, int]:
-    """Loopback at home. 0.0.0.0 and $PORT on Hugging Face Docker Spaces."""
+    """Loopback at home. 0.0.0.0 and $PORT when hosted (Render injects PORT)."""
     if os.getenv("SPACE_ID") or os.getenv("SPACE_HOST") or os.getenv("PORT"):
         return "0.0.0.0", int(os.getenv("PORT") or "7860")
     return HOST, PORT

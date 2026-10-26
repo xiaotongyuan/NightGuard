@@ -1,0 +1,15 @@
+# Render Blueprint. Free public demo of the existing HTTP page.
+# Dashboard: New → Blueprint → this repo. Do not set PORT; Render injects it.
+services:
+  - type: web
+    name: nightguard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m nightguard.ui_server --llm fake
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: PYTHONPATH
+        value: src
