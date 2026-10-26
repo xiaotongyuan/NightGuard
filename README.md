@@ -10,18 +10,21 @@ Hackathon track: **Best Apps and Agents** (Nebius × NVIDIA). Runtime proof uses
 
 ## Live demo
 
-Public Render URL goes here after the first deploy (`https://<name>.onrender.com/`). Same three-pane page. Backend is **fake** (scripted FakeLLM). That is not “out of usage.” `out of usage` only appears after a refused Token Factory bill. The video is the Nebius proof.
+**https://nightguard-h18y.onrender.com/**
 
-Hugging Face Docker and Gradio Spaces now require a paid plan to create. This demo uses a free Render web service. Host notes: [docs/deployment.md](docs/deployment.md).
+Same three-pane page. Backend is **fake** (scripted FakeLLM). That is not “out of usage.” `out of usage` only appears after a refused Token Factory bill. The video is the Nebius proof.
+
+The free host sleeps after about 15 idle minutes. The first open can take a minute. Host notes: [docs/deployment.md](docs/deployment.md).
 
 ### One operator, everyone else watches
 
-The hosted page is **one shared room**, not one night per visitor.
+The hosted page is **one shared room**, not one night per visitor. Every open page pulls that room every **2.5 seconds**.
 
-- The first person who clicks takes the controls. The page says `You have the controls.`
-- A second, third, or fourth visitor can only watch. Buttons stay grey. The page says `Someone else is operating. You can watch.` and refreshes the room every few seconds.
+- Same person, same browser: same `localStorage` token, same seat, same room. Two tabs count. Two Chrome incognito windows also share that token.
+- A different browser is a different person. The first click takes the controls. The page says `You have the controls.`
+- Other people can only watch. Buttons stay grey. The page says `Someone else is operating. You can watch.`
 - Closing the tab does **not** hand the seat over. The lease lasts **3 idle minutes** after the last write. Then the next person who clicks takes over. The others stay watchers.
-- Two tabs in the same browser share one token, so both can click. To see two people, open a normal window and an incognito window (or Chrome and Edge).
+- To see two people: one normal window and one incognito window, or Chrome and Edge.
 
 Writes from a second client return `429 busy`. `GET /session` stays open. Tests: `H2` / `H3` in `tests/test_ui_http.py`.
 

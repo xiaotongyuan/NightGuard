@@ -13,7 +13,7 @@ Default `127.0.0.1:8765`. Loopback only.
 
 ## 1. Session
 
-One process = one shared room. `GET /session` is open. Writes send `X-Operator-Token`. One operator at a time.
+One process = one shared room. The page polls `GET /session` every 2.5s. Same browser keeps one operator token. Writes send `X-Operator-Token`. One operator at a time.
 
 | Item | Default |
 | --- | --- |

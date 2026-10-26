@@ -243,14 +243,11 @@ function applySeat(snap) {
   } else {
     el.textContent = "";
   }
-  if (watching && !watchTimer) {
+  if (!watchTimer) {
     watchTimer = setInterval(() => {
+      if (busy) return;
       loadRoom().catch(() => {});
     }, 2500);
-  }
-  if (!watching && watchTimer) {
-    clearInterval(watchTimer);
-    watchTimer = null;
   }
 }
 

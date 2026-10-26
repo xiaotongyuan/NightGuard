@@ -42,7 +42,7 @@ The page is `python -m nightguard.ui_server` plus `web/`, not Gradio or Streamli
 
 A public host uses **FakeLLM**. Page Backend says `fake`. That is the scripted night, not a billing error. `out of usage` is only for a refused Token Factory call. This demo does not call Token Factory and needs no Secrets.
 
-Local: `127.0.0.1:8765`. Hosted: listen `0.0.0.0:$PORT` (Render injects `PORT`). Judges open `https://<name>.onrender.com/`.
+Local: `127.0.0.1:8765`. Hosted: listen `0.0.0.0:$PORT` (Render injects `PORT`). Judges open [https://nightguard-h18y.onrender.com/](https://nightguard-h18y.onrender.com/).
 
 The free instance sleeps after about 15 idle minutes. The first open can take about a minute.
 
@@ -51,7 +51,7 @@ The free instance sleeps after about 15 idle minutes. The first open can take ab
 | Default inference | FakeLLM. `render.yaml` starts `--llm fake` |
 | Refresh | `GET` the current room. Do not `POST /session` on every open |
 | Reset | **Start this example** is the only full-room reset |
-| Seat | One operator. Writes send `X-Operator-Token`. A second writer gets `429 busy` and can only watch. Idle 3 minutes releases the seat |
+| Seat | One operator. Same browser = same token = same seat. Every page refreshes the shared room every 2.5s. Writes send `X-Operator-Token`. A second writer gets `429 busy` and can only watch. Idle 3 minutes releases the seat |
 | Backend label | `fake` on this host |
 | Do not | one session per visitor, visitor-supplied keys, port-forward, ngrok as the demo URL |
 
@@ -64,7 +64,7 @@ Do not put an API key in the page, the repo, or response JSON.
 3. **New → Blueprint**, pick `xiaotongyuan/NightGuard`. Or **New → Web Service** on the same repo; Render reads `render.yaml`.
 4. Plan: **Free**. Do not set `PORT`.
 5. Wait for the log: `NightGuard UI  http://0.0.0.0:<port>/  llm=fake`.
-6. Put the `https://<name>.onrender.com/` URL on Devpost and in this README.
+6. Live URL: [https://nightguard-h18y.onrender.com/](https://nightguard-h18y.onrender.com/). Same address on Devpost and in this README.
 
 ---
 
