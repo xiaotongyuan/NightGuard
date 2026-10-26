@@ -166,3 +166,189 @@ def test_A3_errors_redact_api_key():
         extract_openai({"choices": []})
     except RuntimeError as exc:
         assert "empty" in str(exc)
+
+
+def _openai_ok(content: str, prompt: int = 1000, completion: int = 80) -> dict:
+    return {
+        "choices": [{"message": {"content": content}}],
+        "usage": {
+            "prompt_tokens": prompt,
+            "completion_tokens": completion,
+            "total_tokens": prompt + completion,
+        },
+    }
+
+
+def test_A8_nemotron_page_only_remotes_morning(monkeypatch):
+    from nightguard.adapter import estimate_usd
+    from nightguard.llm import parse_morning_json, parse_pass_a_json, parse_pass_b_json
+
+    assert estimate_usd({"prompt_tokens": 1_000_000, "completion_tokens": 0}) == 0.06
+    assert estimate_usd({"prompt_tokens": 0, "completion_tokens": 1_000_000}) == 0.24
+
+    hits = {"n": 0}
+    morning_json = json.dumps(
+        {"brief": "Night n1.", "timeline": "none", "filter_text": "none"}
+    )
+
+    class _Resp:
+        def __init__(self, payload: dict):
+            self._payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(self._payload).encode("utf-8")
+
+    def urlopen(req, *args, **kwargs):
+        hits["n"] += 1
+        return _Resp(_openai_ok(morning_json))
+
+    monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", urlopen)
+    now = [1000.0]
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="secret-key-value",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: now[0],
+    )
+    pass_a = parse_pass_a_json(llm.complete("pass_a", {"motion_type": "scratch_burst", "night_id": "n1"}))
+    parse_pass_b_json(
+        llm.complete("pass_b", {"outcome_15min": "no_new_event", "later_motion_type": "none"})
+    )
+    assert hits["n"] == 0
+    assert pass_a["mode"] in ("none", "silent_confirm", "assist_search")
+    morning = parse_morning_json(llm.complete("morning", {"night_id": "n1", "yesterday_filter": "none"}))
+    assert hits["n"] == 1
+    assert morning["brief"]
+    assert llm.hourly is not None
+    assert llm.hourly.spent_usd > 0
+    assert llm.out_of_usage is False
+
+
+def test_A9_hourly_cap_expires_and_does_not_carry(monkeypatch):
+    from nightguard.llm import parse_morning_json
+
+    morning_json = json.dumps(
+        {"brief": "Night n1.", "timeline": "none", "filter_text": "none"}
+    )
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(_openai_ok(morning_json, prompt=10, completion=10)).encode("utf-8")
+
+    hits = {"n": 0}
+
+    def urlopen(req, *args, **kwargs):
+        hits["n"] += 1
+        return _Resp()
+
+    monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", urlopen)
+    now = [3600.0]
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="secret-key-value",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: now[0],
+    )
+    assert llm.hourly is not None
+    llm.hourly.add(0.10)
+    parse_morning_json(llm.complete("morning", {"night_id": "n1"}))
+    assert hits["n"] == 0
+    assert llm.out_of_usage is False
+    now[0] = 7200.0
+    parse_morning_json(llm.complete("morning", {"night_id": "n1"}))
+    assert hits["n"] == 1
+    assert llm.hourly.spent_usd < 0.10
+    assert llm.out_of_usage is False
+
+
+def test_A10_wallet_claim_is_single_seat():
+    from nightguard.adapter import HourlyUsdCap
+
+    now = [1000.0]
+    cap = HourlyUsdCap(0.10, now_fn=lambda: now[0])
+    assert cap.claim() is True
+    assert cap.claim() is False
+    cap.release()
+    assert cap.claim() is True
+    cap.settle(0.10)
+    assert cap.claim() is False
+    assert cap.exhausted() is True
+    now[0] = 4600.0
+    assert cap.claim() is True
+
+
+def test_A11_urlerror_releases_the_wallet_seat(monkeypatch):
+    from nightguard.llm import parse_morning_json
+
+    hits = {"n": 0}
+    morning_json = json.dumps(
+        {"brief": "Night n1.", "timeline": "none", "filter_text": "none"}
+    )
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(_openai_ok(morning_json, prompt=10, completion=10)).encode("utf-8")
+
+    def urlopen(req, *args, **kwargs):
+        hits["n"] += 1
+        if hits["n"] == 1:
+            raise urllib.error.URLError("offline")
+        return _Resp()
+
+    monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", urlopen)
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="secret-key-value",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: 1000.0,
+    )
+    try:
+        llm.complete("morning", {"night_id": "n1"})
+    except urllib.error.URLError:
+        pass
+    else:
+        raise AssertionError("dead network should surface")
+    assert llm.hourly is not None
+    assert llm.hourly.exhausted() is False
+    parse_morning_json(llm.complete("morning", {"night_id": "n1"}))
+    assert hits["n"] == 2
+    assert llm.out_of_usage is False
+
+
+def test_A12_settle_after_the_hour_bills_the_new_hour():
+    from nightguard.adapter import HourlyUsdCap
+
+    now = [3599.0]
+    cap = HourlyUsdCap(0.10, now_fn=lambda: now[0])
+    assert cap.claim() is True
+    now[0] = 3601.0
+    cap.settle(0.01)
+    assert cap.spent_usd == 0.01
+    assert cap.exhausted() is False

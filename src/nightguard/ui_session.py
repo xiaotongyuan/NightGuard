@@ -176,9 +176,12 @@ def _gate_id(reasoning: str) -> str:
 
 
 def backend_label(llm: Any) -> str:
-    """Page word. fake, nano, gemini, or out of usage. Never the raw model id."""
+    """Page word. fake, nano, gemini, hour cap, or out of usage. Never the raw model id."""
     if getattr(llm, "out_of_usage", False):
         return "out of usage"
+    hourly = getattr(llm, "hourly", None)
+    if hourly is not None and hourly.exhausted():
+        return "hour cap"
     provider = getattr(llm, "provider", "") or ""
     if provider == "nemotron":
         return "nano"
@@ -545,6 +548,7 @@ class UiSession:
                 "input": self.last_llm_input,
                 "output": self.last_llm_output,
                 "remote": getattr(self.llm, "last_remote", None),
+                "hourly": self.llm.hourly.status() if getattr(self.llm, "hourly", None) else None,
             },
             "action": dict(action),
             "person": person,

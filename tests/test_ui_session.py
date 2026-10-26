@@ -41,6 +41,28 @@ def test_backend_label_is_nano_until_usage_runs_out():
     assert session.snapshot()["llm_backend"] == "out of usage"
 
 
+def test_backend_label_hour_cap_is_not_out_of_usage():
+    from nightguard.adapter import RemoteLLM
+    from nightguard.ui_session import backend_label
+
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="x",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: 1000.0,
+    )
+    assert llm.hourly is not None
+    llm.hourly.add(0.10)
+    assert backend_label(llm) == "hour cap"
+    assert llm.out_of_usage is False
+    snap = UiSession(llm=llm).snapshot()
+    assert snap["llm_backend"] == "hour cap"
+    assert snap["llm"]["hourly"]["exhausted"] is True
+
+
 def test_W1_new_session_closed_only_openers():
     snap = UiSession().snapshot()
     assert snap["window"]["phase"] == "closed"

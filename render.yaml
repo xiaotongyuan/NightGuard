@@ -1,15 +1,24 @@
 # Render Blueprint. Free public demo of the existing HTTP page.
 # Dashboard: New → Blueprint → this repo. Do not set PORT; Render injects it.
+# NEMOTRON_API_KEY is a dashboard secret (sync: false). Never put the key in this file.
 services:
   - type: web
     name: nightguard
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python -m nightguard.ui_server --llm fake
+    startCommand: python -m nightguard.ui_server --llm nemotron
     healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.11"
       - key: PYTHONPATH
         value: src
+      - key: NEMOTRON_MODEL
+        value: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
+      - key: NEMOTRON_BASE_URL
+        value: https://api.tokenfactory.nebius.com/v1
+      - key: NIGHTGUARD_HOURLY_USD
+        value: "0.10"
+      - key: NEMOTRON_API_KEY
+        sync: false

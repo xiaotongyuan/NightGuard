@@ -250,6 +250,33 @@ class Handler(BaseHTTPRequestHandler):
         return session.set_ui(body)
 
 
+def wire_llm(kind: str, model: str = "") -> tuple[object | None, str]:
+    """Nemotron without a key stays FakeLLM so a public host does not die."""
+    if kind == "fake":
+        return None, "fake"
+    from nightguard.adapter import RemoteLLM
+    from nightguard.ui_session import backend_label
+
+    if kind == "gemini":
+        if not os.getenv("GEMINI_API_KEY"):
+            raise SystemExit("GEMINI_API_KEY missing")
+        chosen = model or os.getenv("GEMINI_MODEL") or "gemini-3.5-flash-lite"
+        llm = RemoteLLM(provider="gemini", model=chosen)
+        return llm, backend_label(llm)
+    if not (os.getenv("NEMOTRON_API_KEY") or "").strip():
+        print("NEMOTRON_API_KEY missing; using FakeLLM", flush=True)
+        return None, "fake"
+    chosen = model or os.getenv("NEMOTRON_MODEL") or "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+    hourly = float(os.getenv("NIGHTGUARD_HOURLY_USD") or "0.10")
+    llm = RemoteLLM(
+        provider="nemotron",
+        model=chosen,
+        remote_kinds=("morning",),
+        hourly_usd=hourly,
+    )
+    return llm, backend_label(llm)
+
+
 def main() -> None:
     global _LLM
     os.chdir(Path(__file__).resolve().parents[2])
@@ -257,27 +284,11 @@ def main() -> None:
     parser.add_argument("--llm", choices=("fake", "gemini", "nemotron"), default="fake")
     parser.add_argument("--model", default="")
     args = parser.parse_args()
-    if args.llm == "fake":
-        _LLM = None
-        label = "fake"
-    else:
+    if args.llm != "fake":
         from dotenv import load_dotenv
 
-        from nightguard.adapter import RemoteLLM
-        from nightguard.ui_session import backend_label
-
         load_dotenv()
-        if args.llm == "gemini":
-            if not os.getenv("GEMINI_API_KEY"):
-                raise SystemExit("GEMINI_API_KEY missing")
-            model = args.model or os.getenv("GEMINI_MODEL") or "gemini-3.5-flash-lite"
-            _LLM = RemoteLLM(provider="gemini", model=model)
-        else:
-            if not os.getenv("NEMOTRON_API_KEY"):
-                raise SystemExit("NEMOTRON_API_KEY missing")
-            model = args.model or os.getenv("NEMOTRON_MODEL") or "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
-            _LLM = RemoteLLM(provider="nemotron", model=model)
-        label = backend_label(_LLM)
+    _LLM, label = wire_llm(args.llm, args.model)
     host, port = listen_addr()
     server = ThreadingHTTPServer((host, port), Handler)
     print(f"NightGuard UI  http://{host}:{port}/  llm={label}", flush=True)

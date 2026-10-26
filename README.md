@@ -12,7 +12,7 @@ Hackathon track: **Best Apps and Agents** (Nebius × NVIDIA). Runtime proof uses
 
 **https://nightguard-h18y.onrender.com/**
 
-Same three-pane page. Backend is **fake** (scripted FakeLLM). That is not “out of usage.” `out of usage` only appears after a refused Token Factory bill. The video is the Nebius proof.
+Same three-pane page. Night clicks stay local. **Update tomorrow's rules** hits NVIDIA Nemotron 3 Nano on Token Factory. Page Backend says `nano` until this UTC hour’s **$0.10** is spent (`hour cap`) or Token Factory refuses the bill (`out of usage`). Leftover dies at the hour. No key on the host → `fake`; the page still opens. The video is the same proof.
 
 The free host sleeps after about 15 idle minutes. The first open can take a minute. Host notes: [docs/deployment.md](docs/deployment.md).
 
@@ -101,7 +101,7 @@ Local page: `http://127.0.0.1:8765/` (FakeLLM, loopback only).
 python -m nightguard.ui_server --llm nemotron
 ```
 
-`--llm nemotron` reads `.env` (`NEMOTRON_API_KEY`, `NEMOTRON_MODEL`, `NEMOTRON_BASE_URL`). Copy `.env.example`. The key never appears in the page or in JSON. After a real call the System pane shows the Token Factory URL and the full model name.
+`--llm nemotron` reads `.env` (`NEMOTRON_API_KEY`, `NEMOTRON_MODEL`, `NEMOTRON_BASE_URL`). Copy `.env.example`. Only **Update tomorrow's rules** hits Token Factory. Pass A and Pass B stay FakeLLM. The hour cap is `$0.10` (`NIGHTGUARD_HOURLY_USD`). Unused dollars die at the hour. The key never appears in the page or in JSON. After a real morning call the System pane shows the Token Factory URL and the full model name.
 
 Gemini is a local scratch backend only. It is not the submission proof.
 

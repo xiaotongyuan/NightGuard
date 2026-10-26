@@ -129,7 +129,7 @@ function render(snap) {
   const clock = document.getElementById("clock");
   clock.textContent =
     `${nightLabel(snap.night_id)}  ${snap.t}  Temperature ${snap.temp_c}  Backend: ${backend}`;
-  clock.classList.toggle("usage-out", backend === "out of usage");
+  clock.classList.toggle("usage-out", backend === "out of usage" || backend === "hour cap");
   document.getElementById("clock-mode").value = "";
   const box = document.getElementById("choices");
   box.innerHTML = "";

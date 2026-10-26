@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -253,6 +254,99 @@ def is_out_of_usage(message: str) -> bool:
     return any(marker in text for marker in _OUT_OF_USAGE_MARKERS)
 
 
+# Token Factory list price for nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B.
+NANO_USD_PER_1M_INPUT = 0.06
+NANO_USD_PER_1M_OUTPUT = 0.24
+# If the vendor omits usage, still count something so a tight loop cannot stay free.
+USD_PER_CALL_FLOOR = 0.0002
+
+
+def estimate_usd(usage: dict | None) -> float:
+    """Dollars for one Token Factory reply. Missing usage pays the floor."""
+    if not usage:
+        return USD_PER_CALL_FLOOR
+    prompt = float(usage.get("prompt_tokens") or 0)
+    completion = float(usage.get("completion_tokens") or 0)
+    if prompt == 0 and completion == 0:
+        total = float(usage.get("total_tokens") or 0)
+        cost = total / 1_000_000.0 * NANO_USD_PER_1M_INPUT
+    else:
+        cost = (
+            prompt / 1_000_000.0 * NANO_USD_PER_1M_INPUT
+            + completion / 1_000_000.0 * NANO_USD_PER_1M_OUTPUT
+        )
+    return max(cost, USD_PER_CALL_FLOOR)
+
+
+class HourlyUsdCap:
+    """One hour, one purse. Unused dollars die at the UTC hour. No carry.
+
+    claim() takes the only in-flight seat so two threads cannot both HTTP.
+    settle() after the hour bills the new hour. The dying hour keeps only
+    what it already spent.
+    """
+
+    def __init__(self, limit_usd: float, now_fn: Callable[[], float] | None = None) -> None:
+        self.limit_usd = max(0.0, float(limit_usd))
+        self.now_fn = now_fn or time.time
+        self._lock = threading.Lock()
+        self._hour_id: int | None = None
+        self._in_flight = False
+        self.spent_usd = 0.0
+
+    def _roll(self) -> None:
+        hour_id = int(self.now_fn() // 3600)
+        if hour_id != self._hour_id:
+            self._hour_id = hour_id
+            self.spent_usd = 0.0
+
+    def remaining(self) -> float:
+        with self._lock:
+            self._roll()
+            return max(0.0, self.limit_usd - self.spent_usd)
+
+    def exhausted(self) -> bool:
+        return self.remaining() <= 0.0
+
+    def allow(self) -> bool:
+        return not self.exhausted()
+
+    def claim(self) -> bool:
+        with self._lock:
+            self._roll()
+            if self._in_flight or self.spent_usd >= self.limit_usd:
+                return False
+            self._in_flight = True
+            return True
+
+    def settle(self, usd: float) -> None:
+        with self._lock:
+            self._roll()
+            self._in_flight = False
+            self.spent_usd += max(0.0, float(usd))
+
+    def release(self) -> None:
+        with self._lock:
+            self._roll()
+            self._in_flight = False
+
+    def add(self, usd: float) -> None:
+        with self._lock:
+            self._roll()
+            self.spent_usd += max(0.0, float(usd))
+
+    def status(self) -> dict:
+        with self._lock:
+            self._roll()
+            remaining = max(0.0, self.limit_usd - self.spent_usd)
+            return {
+                "limit_usd": self.limit_usd,
+                "spent_usd": self.spent_usd,
+                "remaining_usd": remaining,
+                "exhausted": remaining <= 0.0,
+            }
+
+
 def _usage_from(payload: dict) -> dict | None:
     usage = payload.get("usage")
     if not isinstance(usage, dict):
@@ -300,6 +394,9 @@ class RemoteLLM:
         api_key: str | None = None,
         model: str | None = None,
         base_url: str | None = None,
+        remote_kinds: tuple[str, ...] | None = None,
+        hourly_usd: float | None = None,
+        now_fn: Callable[[], float] | None = None,
     ) -> None:
         name = (provider or os.getenv("LLM_PROVIDER") or "gemini").strip().lower()
         if name not in PROVIDERS:
@@ -313,6 +410,8 @@ class RemoteLLM:
             if base_url is not None
             else os.getenv(self.spec.base_url_env, self.spec.default_base)
         )
+        self.remote_kinds = frozenset(remote_kinds) if remote_kinds is not None else None
+        self.hourly = HourlyUsdCap(hourly_usd, now_fn) if hourly_usd is not None else None
         self.calls: list[tuple[str, dict]] = []
         self.out_of_usage = False
         self.last_usage: dict | None = None
@@ -324,23 +423,40 @@ class RemoteLLM:
         self.last_remote = {"url": req.url, "model": self.model}
         return req
 
+    def _local(self, kind: str, payload: dict) -> str:
+        return FakeLLM().complete(kind, payload)
+
     def complete(self, kind: str, payload: dict) -> str:
         self.calls.append((kind, payload))
+        if self.remote_kinds is not None and kind not in self.remote_kinds:
+            return self._local(kind, payload)
         if self.out_of_usage:
-            return FakeLLM().complete(kind, payload)
+            return self._local(kind, payload)
+        claimed = False
+        if self.hourly is not None:
+            if not self.hourly.claim():
+                return self._local(kind, payload)
+            claimed = True
         try:
-            body = call_http(self.encode(kind, payload), self.api_key, self.spec.retry_http)
-        except RuntimeError as exc:
-            if is_out_of_usage(str(exc)):
-                self.out_of_usage = True
-                return FakeLLM().complete(kind, payload)
-            raise
-        self.last_usage = _usage_from(body)
-        raw = self.spec.extract(body)
-        try:
-            return project_to_contract(kind, raw)
-        except (ValueError, TypeError, json.JSONDecodeError):
-            return raw
+            try:
+                body = call_http(self.encode(kind, payload), self.api_key, self.spec.retry_http)
+            except RuntimeError as exc:
+                if is_out_of_usage(str(exc)):
+                    self.out_of_usage = True
+                    return self._local(kind, payload)
+                raise
+            self.last_usage = _usage_from(body)
+            if claimed:
+                self.hourly.settle(estimate_usd(self.last_usage))
+                claimed = False
+            raw = self.spec.extract(body)
+            try:
+                return project_to_contract(kind, raw)
+            except (ValueError, TypeError, json.JSONDecodeError):
+                return raw
+        finally:
+            if claimed:
+                self.hourly.release()
 
 
 def make_remote_llm() -> RemoteLLM:

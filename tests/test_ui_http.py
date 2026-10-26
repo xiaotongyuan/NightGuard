@@ -421,3 +421,26 @@ def test_listen_addr_port_only(monkeypatch):
     monkeypatch.delenv("SPACE_HOST", raising=False)
     monkeypatch.setenv("PORT", "10000")
     assert ui_server.listen_addr() == ("0.0.0.0", 10000)
+
+
+def test_nemotron_without_key_uses_fake(monkeypatch):
+    monkeypatch.delenv("NEMOTRON_API_KEY", raising=False)
+    llm, label = ui_server.wire_llm("nemotron")
+    assert llm is None
+    assert label == "fake"
+
+
+def test_nemotron_blank_key_uses_fake(monkeypatch):
+    monkeypatch.setenv("NEMOTRON_API_KEY", "   ")
+    llm, label = ui_server.wire_llm("nemotron")
+    assert llm is None
+    assert label == "fake"
+
+
+def test_nemotron_with_key_uses_nano(monkeypatch):
+    monkeypatch.setenv("NEMOTRON_API_KEY", "secret-key-value")
+    llm, label = ui_server.wire_llm("nemotron")
+    assert llm is not None
+    assert getattr(llm, "provider", "") == "nemotron"
+    assert getattr(llm, "remote_kinds", None) == frozenset({"morning"})
+    assert label == "nano"
