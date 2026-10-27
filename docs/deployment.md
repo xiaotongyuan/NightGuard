@@ -54,7 +54,7 @@ The page is `python -m nightguard.ui_server` plus `web/`, not Gradio or Streamli
 | Hugging Face Docker / Gradio | Paid to create as of 2026-10. Skip |
 | Hugging Face Static | No. No Python backend |
 
-A public host uses **Nemotron on Token Factory** for morning **Update tomorrow's rules**. Night Pass A / Pass B stay FakeLLM. Page Backend says `nano` when the dashboard key is set. No key → `fake`; the page still opens. `hour cap` is this UTC hour’s `$0.02` spent. `out of usage` is a refused Token Factory bill.
+`render.yaml` starts `--llm nemotron`. Through November 30 the dashboard has no `NEMOTRON_API_KEY`, so the host boots FakeLLM and the page still opens. After the December 1 redeploy, morning **Update tomorrow's rules** hits Nano; night Pass A / Pass B stay FakeLLM. Page Backend says `nano` when the key is in the process. No key → `fake`. `hour cap` is this UTC hour’s `$0.02` spent. `out of usage` is a refused Token Factory bill.
 
 Render sets a 30-second global cooldown between successful Morning Updates and
 rejects JSON request bodies over 64 KiB. These controls limit casual public

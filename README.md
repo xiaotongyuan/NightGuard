@@ -63,10 +63,12 @@ night. Deterministic local replies may be retried once; a paid remote beat is
 attempted once and falls back locally if its JSON is invalid. Morning Update is
 separate.
 
-The public web demo uses a cheaper routing profile: Pass A and Pass B use the
-deterministic FakeLLM, while **Update tomorrow's rules** calls Nemotron. This
-keeps the product loop visible without donating the entire sponsored balance to
-an enthusiastic stranger with an auto-clicker.
+The public web demo is built for that cheaper routing profile: Pass A and Pass
+B stay on deterministic FakeLLM; **Update tomorrow's rules** is the only beat
+that can call Nemotron. Through November 30 the hosted key is unset, so the
+live URL runs entirely on FakeLLM. After the December 1 redeploy, Morning
+Update is the paid call. Dates and labels are under [Model
+availability](#model-availability).
 
 The exact state machine, prompt contracts, filter grammar, and sanitization
 rules live in [the design spec](docs/design_spec.md).
