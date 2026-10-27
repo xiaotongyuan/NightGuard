@@ -45,6 +45,7 @@ const HARD_RULE_WORDS = {
 const HL = new Set(["belief_state", "reasoning", "verdict", "reason"]);
 const ERRORS = {
   busy: "Someone else is operating. You can watch.",
+  morning_cooldown: "Morning Update is cooling down. Try again in a moment.",
 };
 let feedback = "none";
 let busy = false;
@@ -129,7 +130,10 @@ function render(snap) {
   const clock = document.getElementById("clock");
   clock.textContent =
     `${nightLabel(snap.night_id)}  ${snap.t}  Temperature ${snap.temp_c}  Backend: ${backend}`;
-  clock.classList.toggle("usage-out", backend === "out of usage" || backend === "hour cap");
+  clock.classList.toggle(
+    "usage-out",
+    backend === "out of usage" || backend === "hour cap" || backend === "remote error",
+  );
   document.getElementById("clock-mode").value = "";
   const box = document.getElementById("choices");
   box.innerHTML = "";
@@ -155,9 +159,13 @@ function render(snap) {
       : `${stepKind} · no LLM`;
   const remoteEl = document.getElementById("llm-remote");
   const remote = snap.llm && snap.llm.remote;
+  const fallback = snap.llm && snap.llm.fallback;
   if (remote && remote.url) {
     remoteEl.hidden = false;
     remoteEl.textContent = `model  ${remote.model}\nurl    ${remote.url}`;
+  } else if (fallback) {
+    remoteEl.hidden = false;
+    remoteEl.textContent = fallback;
   } else {
     remoteEl.hidden = true;
     remoteEl.textContent = "";
@@ -238,10 +246,14 @@ function applySeat(snap) {
     for (const node of document.querySelectorAll("button, select")) {
       node.disabled = true;
     }
-  } else if (seat.you) {
-    el.textContent = "You have the controls.";
   } else {
-    el.textContent = "";
+    el.textContent = seat.you ? "You have the controls." : "";
+    for (const id of ["btn-example", "clock-mode", "temp", "fb-mosquito", "fb-not", "fb-none"]) {
+      const node = document.getElementById(id);
+      if (node) node.disabled = false;
+    }
+    const morning = document.getElementById("btn-morning");
+    if (morning) morning.disabled = Boolean(snap.window && snap.window.open);
   }
   if (!watchTimer) {
     watchTimer = setInterval(() => {

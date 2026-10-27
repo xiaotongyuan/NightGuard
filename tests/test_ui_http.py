@@ -136,7 +136,7 @@ def test_http_billing_falls_back_and_says_out_of_usage(monkeypatch):
         ui_server.reset_operator()
 
 
-def test_http_remote_outage_is_502_without_leaking_the_key(monkeypatch):
+def test_http_remote_outage_uses_fake_without_leaking_the_key(monkeypatch):
     import urllib.error
 
     from nightguard.adapter import RemoteLLM
@@ -165,19 +165,15 @@ def test_http_remote_outage_is_502_without_leaking_the_key(monkeypatch):
     thread.start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
     try:
-        status, failed = _post(base, "/play", {"choice_id": "open.scratch.left_calf"})
-        assert status == 502
-        assert failed == {"error": "llm_failed"}
-        assert key not in json.dumps(failed)
-
-        status, snap = _get(base, "/session")
+        status, snap = _post(base, "/play", {"choice_id": "open.scratch.left_calf"})
         assert status == 200
-        assert snap["window"]["open"] is False
-        assert snap["last_step"]["kind"] == "none"
+        assert snap["llm_backend"] == "remote error"
+        assert snap["llm"]["fallback"] == "unknown network error; FakeLLM is used"
+        assert snap["llm"]["remote"] is None
+        assert snap["last_step"]["kind"] != "none"
         assert key not in json.dumps(snap)
         session = ui_server.current_session()
-        assert len(session.loop.log.rows) == 1
-        assert session.loop.window.is_open is False
+        assert len(session.loop.log.rows) >= 1
     finally:
         server.shutdown()
         server.server_close()
@@ -403,6 +399,56 @@ def test_http_bad_temp_is_400_not_llm_failed():
         ui_server.reset_operator()
 
 
+def test_http_rejects_oversized_json_body():
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, denied = _post(base, "/ui", {"padding": "x" * ui_server.MAX_BODY_BYTES})
+        assert status == 413
+        assert denied == {"error": "request_too_large"}
+        assert ui_server._OPERATOR_TOKEN is None
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
+
+
+def test_http_morning_cooldown_limits_one_operator(monkeypatch):
+    monkeypatch.setenv("NIGHTGUARD_MORNING_COOLDOWN_SEC", "60")
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, first = _post(base, "/morning", {"morning_label": "none"})
+        assert status == 200
+        assert first["night_id"] == "n2"
+        status, denied = _post(base, "/morning", {"morning_label": "none"})
+        assert status == 429
+        assert denied == {"error": "morning_cooldown"}
+        status, snap = _get(base, "/session")
+        assert status == 200
+        assert snap["night_id"] == "n2"
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
+
+
 def test_listen_addr_local(monkeypatch):
     monkeypatch.delenv("SPACE_ID", raising=False)
     monkeypatch.delenv("SPACE_HOST", raising=False)
@@ -421,6 +467,20 @@ def test_listen_addr_port_only(monkeypatch):
     monkeypatch.delenv("SPACE_HOST", raising=False)
     monkeypatch.setenv("PORT", "10000")
     assert ui_server.listen_addr() == ("0.0.0.0", 10000)
+
+
+def test_gemini_public_bind_requires_explicit_override(monkeypatch):
+    monkeypatch.delenv("NIGHTGUARD_ALLOW_PUBLIC_GEMINI", raising=False)
+    try:
+        ui_server.enforce_backend_bind("gemini", "0.0.0.0")
+    except SystemExit as exc:
+        assert "loopback-only" in str(exc)
+    else:
+        raise AssertionError("public Gemini should be refused")
+    monkeypatch.setenv("NIGHTGUARD_ALLOW_PUBLIC_GEMINI", "1")
+    ui_server.enforce_backend_bind("gemini", "0.0.0.0")
+    ui_server.enforce_backend_bind("gemini", "127.0.0.1")
+    ui_server.enforce_backend_bind("nemotron", "0.0.0.0")
 
 
 def test_nemotron_without_key_uses_fake(monkeypatch):

@@ -19,6 +19,8 @@ services:
       - key: NEMOTRON_BASE_URL
         value: https://api.tokenfactory.nebius.com/v1
       - key: NIGHTGUARD_HOURLY_USD
-        value: "0.10"
+        value: "0.02"
+      - key: NIGHTGUARD_MORNING_COOLDOWN_SEC
+        value: "30"
       - key: NEMOTRON_API_KEY
         sync: false

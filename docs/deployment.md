@@ -22,11 +22,25 @@ python -m nightguard.ui_server
 python -m nightguard.ui_server --llm nemotron
 ```
 
-`--llm nemotron` reads `.env`: `NEMOTRON_API_KEY`, `NEMOTRON_MODEL`, `NEMOTRON_BASE_URL`, `NIGHTGUARD_HOURLY_USD`. Copy `.env.example`. Only morning **Update tomorrow's rules** hits Token Factory. Night Pass A / Pass B stay FakeLLM. The hour purse is `$0.10` on the UTC hour; leftover dies at the hour and does not carry. A call claimed in one hour and settled after the hour is billed to the **new** hour. The wallet takes one in-flight seat so two threads cannot both HTTP. When the purse is empty the page Backend says `hour cap` (not `out of usage`). The key never appears in the page, the snapshot, or an error body. After a real morning call the System pane shows the Token Factory URL and the full model name.
+`--llm nemotron` reads `.env`: `NEMOTRON_API_KEY`, `NEMOTRON_MODEL`,
+`NEMOTRON_BASE_URL`, `NIGHTGUARD_HOURLY_USD`, and
+`NIGHTGUARD_MORNING_COOLDOWN_SEC`. Copy `.env.example`. Only morning **Update
+tomorrow's rules** hits Token Factory. Night Pass A / Pass B stay FakeLLM. The
+hour purse is `$0.02` on the UTC hour; leftover dies at the hour and does not
+carry. A request requires at least `$0.001` remaining and model output is capped
+at 512 tokens. A call claimed in one hour and settled after the hour is billed
+to the **new** hour. The wallet takes one in-flight seat so two threads cannot
+both HTTP. When the purse is empty the page Backend says `hour cap` (not `out of
+usage`). The key never appears in the page, the snapshot, or an error body.
+After a real morning call the System pane shows the Token Factory URL and the
+full model name.
 
-Submission proof is **NVIDIA Nemotron on Nebius Token Factory**. A same-named model on Hugging Face or OpenRouter does not count. Gemini is local practice only.
+Submission proof is **NVIDIA Nemotron on Nebius Token Factory**. A same-named
+model on Hugging Face or OpenRouter does not count. Gemini is local practice
+only; the server refuses to expose it on a public bind unless
+`NIGHTGUARD_ALLOW_PUBLIC_GEMINI=1` is explicitly set.
 
-If Token Factory returns a billing refusal (HTTP 402, `insufficient_quota`, balance, trial ended), `RemoteLLM` finishes the beat with FakeLLM and the page Backend becomes `out of usage`. Later remote calls in that process stay off. Other failures stay visible locally so a bad model reply is not hidden.
+If Token Factory returns a billing refusal (HTTP 402, `insufficient_quota`, balance, trial ended), `RemoteLLM` finishes the beat with FakeLLM and the page Backend becomes `out of usage`. Later remote calls in that process stay off. Network, HTTP 500, and unknown remote errors also finish with FakeLLM; Backend says `remote error` and the System pane names the fallback. The next Update still tries Token Factory.
 
 ---
 
@@ -40,9 +54,14 @@ The page is `python -m nightguard.ui_server` plus `web/`, not Gradio or Streamli
 | Hugging Face Docker / Gradio | Paid to create as of 2026-10. Skip |
 | Hugging Face Static | No. No Python backend |
 
-A public host uses **Nemotron on Token Factory** for morning **Update tomorrow's rules**. Night Pass A / Pass B stay FakeLLM. Page Backend says `nano` when the dashboard key is set. No key → `fake`; the page still opens. `hour cap` is this UTC hour’s `$0.10` spent. `out of usage` is a refused Token Factory bill.
+A public host uses **Nemotron on Token Factory** for morning **Update tomorrow's rules**. Night Pass A / Pass B stay FakeLLM. Page Backend says `nano` when the dashboard key is set. No key → `fake`; the page still opens. `hour cap` is this UTC hour’s `$0.02` spent. `out of usage` is a refused Token Factory bill.
 
-`NEMOTRON_API_KEY` lives in the Render dashboard only (`sync: false` in `render.yaml`). Never put the key in the repo, the page, or response JSON. Model, base URL, and the `$0.10` hour purse are non-secret env vars in `render.yaml`. This service already exists: a later Blueprint sync **will not** prompt for the key. If the secret is missing the host boots as FakeLLM and only the Backend label / start log show it.
+Render sets a 30-second global cooldown between successful Morning Updates and
+rejects JSON request bodies over 64 KiB. These controls limit casual public
+abuse. The in-memory purse still resets with the process, so the Nebius account
+credit limit remains the durable hard stop.
+
+`NEMOTRON_API_KEY` lives in the Render dashboard only (`sync: false` in `render.yaml`). Never put the key in the repo, the page, or response JSON. Model, base URL, and the `$0.02` hour purse are non-secret env vars in `render.yaml`. This service already exists: a later Blueprint sync **will not** prompt for the key. If the secret is missing the host boots as FakeLLM and only the Backend label / start log show it.
 
 Local: `127.0.0.1:8765`. Hosted: listen `0.0.0.0:$PORT` (Render injects `PORT`). Judges open [https://nightguard-h18y.onrender.com/](https://nightguard-h18y.onrender.com/).
 
@@ -54,7 +73,8 @@ The free instance sleeps after about 15 idle minutes. The first open can take ab
 | Refresh | `GET` the current room. Do not `POST /session` on every open |
 | Reset | **Start this example** is the only full-room reset |
 | Seat | One operator. Same browser = same token = same seat. Every page refreshes the shared room every 2.5s. Writes send `X-Operator-Token`. A second writer gets `429 busy` and can only watch. Idle 3 minutes releases the seat |
-| Backend label | `nano` when the key is set; `fake` if the secret is missing; `hour cap` or `out of usage` when those fire |
+| Paid-update throttle | Successful Morning Updates are at least 30 seconds apart on Render |
+| Backend label | `nano` when the key is set; `fake` if the secret is missing; `hour cap`, `out of usage`, or `remote error` when those fire |
 | Do not | one session per visitor, visitor-supplied keys, port-forward, ngrok as the demo URL |
 
 ### Render (free web service)

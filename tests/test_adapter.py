@@ -47,6 +47,8 @@ def test_A2_gemini_and_nemotron_encode_same_contract():
     assert "Return exactly these keys" in n.body["messages"][1]["content"]
     assert "Example:" not in g.body["contents"][0]["parts"][0]["text"]
     assert "Example:" not in n.body["messages"][1]["content"]
+    assert g.body["generationConfig"]["maxOutputTokens"] == 512
+    assert n.body["max_tokens"] == 512
     assert encode_gemini is gemini.spec.encode
 
 
@@ -329,16 +331,16 @@ def test_A11_urlerror_releases_the_wallet_seat(monkeypatch):
         hourly_usd=0.10,
         now_fn=lambda: 1000.0,
     )
-    try:
-        llm.complete("morning", {"night_id": "n1"})
-    except urllib.error.URLError:
-        pass
-    else:
-        raise AssertionError("dead network should surface")
+    first = parse_morning_json(llm.complete("morning", {"night_id": "n1"}))
+    assert first["brief"]
+    assert llm.last_fallback == "unknown network error; FakeLLM is used"
+    assert llm.last_remote is None
     assert llm.hourly is not None
     assert llm.hourly.exhausted() is False
+    assert llm.out_of_usage is False
     parse_morning_json(llm.complete("morning", {"night_id": "n1"}))
     assert hits["n"] == 2
+    assert llm.last_fallback is None
     assert llm.out_of_usage is False
 
 
@@ -352,3 +354,212 @@ def test_A12_settle_after_the_hour_bills_the_new_hour():
     cap.settle(0.01)
     assert cap.spent_usd == 0.01
     assert cap.exhausted() is False
+
+
+def test_A13_fake_fallback_clears_last_remote(monkeypatch):
+    from nightguard.llm import parse_morning_json
+
+    morning_json = json.dumps(
+        {"brief": "Night n1.", "timeline": "none", "filter_text": "none"}
+    )
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(_openai_ok(morning_json, prompt=10, completion=10)).encode("utf-8")
+
+    def raise_402(*_args, **_kwargs):
+        raise urllib.error.HTTPError(
+            "https://example.invalid/v1/chat/completions",
+            402,
+            "Payment Required",
+            None,
+            io.BytesIO(b'{"error":{"code":"insufficient_quota","message":"credit balance is 0"}}'),
+        )
+
+    monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", raise_402)
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="secret-key-value",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: 1000.0,
+    )
+    parse_morning_json(llm.complete("morning", {"night_id": "n1"}))
+    assert llm.out_of_usage is True
+    assert llm.last_remote is None
+
+    llm2 = RemoteLLM(
+        provider="nemotron",
+        api_key="secret-key-value",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: 1000.0,
+    )
+    llm2.last_remote = {"url": "https://example.invalid/v1", "model": llm2.model}
+    assert llm2.hourly is not None
+    llm2.hourly.add(0.10)
+    monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", lambda *_a, **_k: _Resp())
+    parse_morning_json(llm2.complete("morning", {"night_id": "n1"}))
+    assert llm2.last_remote is None
+
+
+def test_A14_remote_morning_bad_json_is_not_paid_twice(monkeypatch):
+    from nightguard.llm import fallback_morning, invoke
+
+    hits = {"n": 0}
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(_openai_ok("{", prompt=10, completion=10)).encode("utf-8")
+
+    def urlopen(*_args, **_kwargs):
+        hits["n"] += 1
+        return _Resp()
+
+    monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", urlopen)
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="secret-key-value",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: 1000.0,
+    )
+    payload = {"night_id": "n1", "yesterday_filter": "none"}
+    out, attempts, failed = invoke(llm, "morning", payload, {})
+    assert hits["n"] == 1
+    assert attempts == 1
+    assert failed is True
+    assert out == fallback_morning(payload)
+
+
+def test_A15_http_500_uses_fake_and_is_not_sticky(monkeypatch):
+    from nightguard.llm import parse_morning_json
+
+    hits = {"n": 0}
+    morning_json = json.dumps(
+        {"brief": "Night n1.", "timeline": "none", "filter_text": "none"}
+    )
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(_openai_ok(morning_json, prompt=10, completion=10)).encode("utf-8")
+
+    def urlopen(req, *args, **kwargs):
+        hits["n"] += 1
+        if hits["n"] == 1:
+            raise urllib.error.HTTPError(
+                "https://example.invalid/v1/chat/completions",
+                500,
+                "server error",
+                None,
+                io.BytesIO(b'{"error":"nope"}'),
+            )
+        return _Resp()
+
+    monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", urlopen)
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="secret-key-value",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: 1000.0,
+    )
+    parse_morning_json(llm.complete("morning", {"night_id": "n1"}))
+    assert llm.last_fallback == "unknown remote error; FakeLLM is used"
+    assert llm.last_remote is None
+    assert llm.out_of_usage is False
+    parse_morning_json(llm.complete("morning", {"night_id": "n1"}))
+    assert hits["n"] == 2
+    assert llm.last_fallback is None
+
+
+def test_A16_wallet_reserves_the_last_mill(monkeypatch):
+    from nightguard.adapter import HourlyUsdCap
+
+    cap = HourlyUsdCap(0.10, now_fn=lambda: 1000.0)
+    cap.add(0.0991)
+    assert cap.status()["remaining_usd"] < cap.status()["min_call_usd"]
+    assert cap.exhausted() is True
+    assert cap.claim() is False
+
+
+def test_A17_billing_429_is_not_retried(monkeypatch):
+    hits = {"n": 0}
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="secret-key-value",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+    )
+
+    def raise_quota(*_args, **_kwargs):
+        hits["n"] += 1
+        raise urllib.error.HTTPError(
+            "https://example.invalid/v1/chat/completions",
+            429,
+            "Too Many Requests",
+            None,
+            io.BytesIO(b'{"error":{"code":"insufficient_quota"}}'),
+        )
+
+    monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", raise_quota)
+    llm.complete("morning", {"night_id": "n1"})
+    assert hits["n"] == 1
+    assert llm.out_of_usage is True
+
+
+def test_A18_empty_remote_envelope_uses_fake_after_settlement(monkeypatch):
+    from nightguard.llm import parse_morning_json
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps({"choices": [], "usage": {"total_tokens": 10}}).encode("utf-8")
+
+    monkeypatch.setattr("nightguard.adapter.urllib.request.urlopen", lambda *_a, **_k: _Resp())
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="secret-key-value",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: 1000.0,
+    )
+    out = parse_morning_json(llm.complete("morning", {"night_id": "n1"}))
+    assert out["brief"]
+    assert llm.last_fallback == "unknown remote error; FakeLLM is used"
+    assert llm.last_remote is None
+    assert llm.hourly is not None
+    assert llm.hourly.spent_usd > 0

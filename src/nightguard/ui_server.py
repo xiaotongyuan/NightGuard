@@ -17,6 +17,7 @@ HOST = "127.0.0.1"
 PORT = 8765
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 LEASE_SEC = 180.0
+MAX_BODY_BYTES = 64 * 1024
 WRITE_PATHS = {
     "/session",
     "/play",
@@ -41,6 +42,7 @@ _WRITE = threading.Lock()
 _OPERATOR_TOKEN: str | None = None
 _OPERATOR_UNTIL = 0.0
 _IN_FLIGHT = 0
+_LAST_MORNING_AT = 0.0
 
 
 def _make_session(
@@ -72,11 +74,12 @@ def replace_session(session: UiSession) -> UiSession:
 
 
 def reset_operator() -> None:
-    global _OPERATOR_TOKEN, _OPERATOR_UNTIL, _IN_FLIGHT
+    global _OPERATOR_TOKEN, _OPERATOR_UNTIL, _IN_FLIGHT, _LAST_MORNING_AT
     with _SEAT:
         _OPERATOR_TOKEN = None
         _OPERATOR_UNTIL = 0.0
         _IN_FLIGHT = 0
+        _LAST_MORNING_AT = 0.0
 
 
 def request_token(handler: BaseHTTPRequestHandler) -> str:
@@ -142,6 +145,12 @@ def _read_json(handler: BaseHTTPRequestHandler) -> dict:
     length = int(handler.headers.get("Content-Length") or "0")
     if length <= 0:
         return {}
+    if length > MAX_BODY_BYTES:
+        # Drain only the bounded prefix so common clients receive the 413
+        # instead of a connection reset while they are still sending.
+        handler.rfile.read(min(length, MAX_BODY_BYTES + 1))
+        handler.close_connection = True
+        raise UiError("request_too_large", 413)
     raw = handler.rfile.read(length)
     if not raw:
         return {}
@@ -188,7 +197,9 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/session":
             token = request_token(self)
-            self._send(200, attach_operator(current_session().snapshot(), token))
+            with _WRITE:
+                snap = current_session().snapshot()
+            self._send(200, attach_operator(snap, token))
             return
         self._static(path)
 
@@ -224,6 +235,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
     def _mutate(self, path: str, body: dict) -> dict:
+        global _LAST_MORNING_AT
         if path == "/session":
             session = _make_session(
                 mode=str(body.get("mode") or "inspect"),
@@ -240,11 +252,17 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/next-night":
             return session.next_night()
         if path == "/morning":
+            cooldown = max(0.0, float(os.getenv("NIGHTGUARD_MORNING_COOLDOWN_SEC") or "0"))
+            now = time.monotonic()
+            if cooldown and _LAST_MORNING_AT and now - _LAST_MORNING_AT < cooldown:
+                raise UiError("morning_cooldown", 429)
             script = body.get("script_filter_text")
-            return session.morning(
+            snap = session.morning(
                 morning_label=str(body.get("morning_label") or "none"),
                 script_filter_text=script if isinstance(script, str) else None,
             )
+            _LAST_MORNING_AT = now
+            return snap
         if path == "/label":
             return session.label(str(body.get("morning_label") or ""))
         return session.set_ui(body)
@@ -267,7 +285,7 @@ def wire_llm(kind: str, model: str = "") -> tuple[object | None, str]:
         print("NEMOTRON_API_KEY missing; using FakeLLM", flush=True)
         return None, "fake"
     chosen = model or os.getenv("NEMOTRON_MODEL") or "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
-    hourly = float(os.getenv("NIGHTGUARD_HOURLY_USD") or "0.10")
+    hourly = float(os.getenv("NIGHTGUARD_HOURLY_USD") or "0.02")
     llm = RemoteLLM(
         provider="nemotron",
         model=chosen,
@@ -275,6 +293,11 @@ def wire_llm(kind: str, model: str = "") -> tuple[object | None, str]:
         hourly_usd=hourly,
     )
     return llm, backend_label(llm)
+
+
+def enforce_backend_bind(kind: str, host: str) -> None:
+    if kind == "gemini" and host != HOST and os.getenv("NIGHTGUARD_ALLOW_PUBLIC_GEMINI") != "1":
+        raise SystemExit("Gemini scratch backend is loopback-only")
 
 
 def main() -> None:
@@ -288,8 +311,9 @@ def main() -> None:
         from dotenv import load_dotenv
 
         load_dotenv()
-    _LLM, label = wire_llm(args.llm, args.model)
     host, port = listen_addr()
+    enforce_backend_bind(args.llm, host)
+    _LLM, label = wire_llm(args.llm, args.model)
     server = ThreadingHTTPServer((host, port), Handler)
     print(f"NightGuard UI  http://{host}:{port}/  llm={label}", flush=True)
     server.serve_forever()

@@ -1,3 +1,5 @@
+import pytest
+
 from nightguard.events import make_event
 from nightguard.llm import FakeLLM
 from nightguard.loop import NightLoop
@@ -202,3 +204,20 @@ def test_L5_upgrade_does_not_spend_llm_budget():
     assert loop.pass_a_count == 1
     assert loop.pass_b_count == 1
     assert loop.total_llm_calls == 2
+
+
+def test_L6_pass_b_failure_closes_the_window():
+    class FailPassB(FakeLLM):
+        def complete(self, kind, payload):
+            if kind == "pass_b":
+                raise RuntimeError("offline")
+            return super().complete(kind, payload)
+
+    loop = NightLoop(llm=FailPassB())
+    start = "02:00:00"
+    loop.on_event(make_event(t=start, motion_type="scratch_burst"))
+    assert loop.window.is_open is True
+    with pytest.raises(RuntimeError, match="offline"):
+        loop.advance_clock(add_minutes(start, 15))
+    assert loop.window.is_open is False
+    assert loop.memory.cards == []

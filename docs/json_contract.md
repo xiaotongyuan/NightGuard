@@ -55,7 +55,7 @@ Gate first. Any hit: **no LLM**. Code writes a flat JSON with the same shape as 
 | `motion_type` is `leave_bed` | same | `Gated: leave_bed. No LLM.` |
 | `posture=lie_stable` and `motion_type=none` | same | `Gated: settled lie. Lights off. No LLM.` |
 | `motion_type` is not `scratch_burst` / `curl` / `sigh_shift` | same | `Gated: motion not a trigger. No LLM.` |
-| Night LLM already 6 (Pass A, Pass B, and retries; morning excluded) | same | `Gated: night llm budget. No LLM.` |
+| Night LLM already 6 (Pass A, Pass B, and local parse retries; morning excluded) | same | `Gated: night llm budget. No LLM.` |
 
 Gate output still has the nine downstream Pass A snapshot keys, e.g. a cold room:
 
@@ -355,8 +355,10 @@ New-rule shape is locked by evidence: a clock habit in `habit_text` with `~HH:MM
 ## 9. Parse failure (every LLM output)
 
 1. Pure JSON. No markdown fences.
-2. Missing key / illegal enum / not flat → retry once.
-3. Fail again: rule fallback. Do not regex-scrape.
+2. Deterministic local client: missing key / illegal enum / not flat → retry
+   once, then rule fallback.
+3. Remote client: one paid HTTP attempt. Invalid JSON goes directly to rule
+   fallback. Do not regex-scrape.
 4. A successful parse still runs `sanitize_pass_a`: derive `light/brightness/duration_s/aim` from `mode`, and `awake` from `posture`. Do not return `json.loads` raw.
 
 Pass A rule fallback:

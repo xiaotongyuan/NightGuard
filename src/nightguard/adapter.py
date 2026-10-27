@@ -38,6 +38,7 @@ class HttpRequest:
 
 EncodeFn = Callable[[str, str, str, str, str], HttpRequest]
 ExtractFn = Callable[[dict], str]
+MAX_OUTPUT_TOKENS = 512
 
 
 @dataclass(frozen=True)
@@ -143,6 +144,7 @@ def encode_gemini(system: str, user: str, api_key: str, model: str, base_url: st
     config = {
         "temperature": 0.1,
         "responseMimeType": "application/json",
+        "maxOutputTokens": MAX_OUTPUT_TOKENS,
     }
     if "2.5" in model:
         config["thinkingConfig"] = {"thinkingBudget": 0}
@@ -177,6 +179,7 @@ def encode_openai(system: str, user: str, api_key: str, model: str, base_url: st
         body={
             "model": model,
             "temperature": 0.1,
+            "max_tokens": MAX_OUTPUT_TOKENS,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -259,6 +262,10 @@ NANO_USD_PER_1M_INPUT = 0.06
 NANO_USD_PER_1M_OUTPUT = 0.24
 # If the vendor omits usage, still count something so a tight loop cannot stay free.
 USD_PER_CALL_FLOOR = 0.0002
+# Keep this much of the hourly purse available before opening another request.
+# The bounded prompts and replies cost far less; this prevents a last tiny
+# remainder from authorizing one more full HTTP call.
+USD_PER_CALL_RESERVE = 0.001
 
 
 def estimate_usd(usage: dict | None) -> float:
@@ -286,8 +293,14 @@ class HourlyUsdCap:
     what it already spent.
     """
 
-    def __init__(self, limit_usd: float, now_fn: Callable[[], float] | None = None) -> None:
+    def __init__(
+        self,
+        limit_usd: float,
+        now_fn: Callable[[], float] | None = None,
+        min_call_usd: float = USD_PER_CALL_RESERVE,
+    ) -> None:
         self.limit_usd = max(0.0, float(limit_usd))
+        self.min_call_usd = max(0.0, float(min_call_usd))
         self.now_fn = now_fn or time.time
         self._lock = threading.Lock()
         self._hour_id: int | None = None
@@ -306,7 +319,7 @@ class HourlyUsdCap:
             return max(0.0, self.limit_usd - self.spent_usd)
 
     def exhausted(self) -> bool:
-        return self.remaining() <= 0.0
+        return self.remaining() < self.min_call_usd
 
     def allow(self) -> bool:
         return not self.exhausted()
@@ -314,7 +327,8 @@ class HourlyUsdCap:
     def claim(self) -> bool:
         with self._lock:
             self._roll()
-            if self._in_flight or self.spent_usd >= self.limit_usd:
+            remaining = self.limit_usd - self.spent_usd
+            if self._in_flight or remaining < self.min_call_usd:
                 return False
             self._in_flight = True
             return True
@@ -343,7 +357,8 @@ class HourlyUsdCap:
                 "limit_usd": self.limit_usd,
                 "spent_usd": self.spent_usd,
                 "remaining_usd": remaining,
-                "exhausted": remaining <= 0.0,
+                "min_call_usd": self.min_call_usd,
+                "exhausted": remaining < self.min_call_usd,
             }
 
 
@@ -378,6 +393,8 @@ def call_http(req: HttpRequest, api_key: str, retry_http: tuple[int, ...] = (429
         except urllib.error.HTTPError as exc:
             err = exc.read().decode("utf-8", errors="replace")[:240]
             last_err = redact(f"remote http {exc.code}: {err}", api_key)
+            if is_out_of_usage(last_err):
+                raise RuntimeError(last_err) from None
             if exc.code in retry_http and attempt == 0:
                 time.sleep(3)
                 continue
@@ -416,6 +433,7 @@ class RemoteLLM:
         self.out_of_usage = False
         self.last_usage: dict | None = None
         self.last_remote: dict | None = None
+        self.last_fallback: str | None = None
 
     def encode(self, kind: str, payload: dict) -> HttpRequest:
         system, user = pack_user(kind, payload)
@@ -426,34 +444,51 @@ class RemoteLLM:
     def _local(self, kind: str, payload: dict) -> str:
         return FakeLLM().complete(kind, payload)
 
+    def _use_fake(self, kind: str, payload: dict, note: str | None) -> str:
+        self.last_remote = None
+        self.last_fallback = note
+        return self._local(kind, payload)
+
     def complete(self, kind: str, payload: dict) -> str:
         self.calls.append((kind, payload))
         if self.remote_kinds is not None and kind not in self.remote_kinds:
             return self._local(kind, payload)
         if self.out_of_usage:
-            return self._local(kind, payload)
+            return self._use_fake(kind, payload, None)
         claimed = False
         if self.hourly is not None:
             if not self.hourly.claim():
-                return self._local(kind, payload)
+                return self._use_fake(kind, payload, None)
             claimed = True
         try:
             try:
                 body = call_http(self.encode(kind, payload), self.api_key, self.spec.retry_http)
-            except RuntimeError as exc:
-                if is_out_of_usage(str(exc)):
+                self.last_usage = _usage_from(body)
+                try:
+                    billed_usd = estimate_usd(self.last_usage)
+                except (TypeError, ValueError):
+                    billed_usd = USD_PER_CALL_FLOOR
+                if claimed:
+                    self.hourly.settle(billed_usd)
+                    claimed = False
+                raw = self.spec.extract(body)
+                try:
+                    projected = project_to_contract(kind, raw)
+                except (ValueError, TypeError, json.JSONDecodeError):
+                    projected = raw
+            except Exception as exc:
+                if isinstance(exc, RuntimeError) and is_out_of_usage(str(exc)):
                     self.out_of_usage = True
-                    return self._local(kind, payload)
-                raise
-            self.last_usage = _usage_from(body)
-            if claimed:
-                self.hourly.settle(estimate_usd(self.last_usage))
-                claimed = False
-            raw = self.spec.extract(body)
-            try:
-                return project_to_contract(kind, raw)
-            except (ValueError, TypeError, json.JSONDecodeError):
-                return raw
+                    return self._use_fake(kind, payload, None)
+                if isinstance(exc, urllib.error.HTTPError):
+                    note = "unknown remote error; FakeLLM is used"
+                elif isinstance(exc, urllib.error.URLError):
+                    note = "unknown network error; FakeLLM is used"
+                else:
+                    note = "unknown remote error; FakeLLM is used"
+                return self._use_fake(kind, payload, note)
+            self.last_fallback = None
+            return projected
         finally:
             if claimed:
                 self.hourly.release()

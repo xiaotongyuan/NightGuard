@@ -51,7 +51,13 @@ class NightLoop:
         assert pending is not None
         payload = prompts.pass_b_input(pending, outcome_15min, later_event)
         self.last_pass_b_input = payload
-        result, attempts, failed = invoke(self.llm, "pass_b", payload, pending["event"])
+        try:
+            result, attempts, failed = invoke(self.llm, "pass_b", payload, pending["event"])
+        except Exception:
+            # A transport or custom-client failure must not strand the room in
+            # an open watch window with no legal way to replay Pass B.
+            self.window.reset()
+            raise
         self.llm_calls_tonight += attempts
         self.total_llm_calls += attempts
         self.pass_b_count += 1

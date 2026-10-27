@@ -14,7 +14,7 @@ This is a playable closed loop, not a hardware product. Stop at an honest POC. D
 | --- | --- |
 | Browser three panes: human events → gates / window / LLM → lamp and cards | Real mattress, real spots, mosquito audio |
 | Night one may be wrong; after three nights the rules follow the person | “How many mosquitoes” |
-| One Token Factory → Nemotron call on camera | Selling FakeLLM as live intelligence |
+| Every required video beat uses its selected LLM; at least one visible Token Factory → Nemotron proof | Selling FakeLLM as live intelligence |
 | Lie down, lights off, no hardware action | A reading lamp or a repeller |
 
 Tone: geeky, minimal, technically dense. One dry joke. Judges should remember: *human is the sensor · mosquito stays hidden*. Night one can be messy. That is the design. Lie down to read and the lamp will betray you — it is not a reading light.
@@ -30,6 +30,96 @@ So the split is not “the model replaces the state machine.” Code clusters, c
 Morning is the clean beat: code will not decide “ignore the 2 a.m. water trip tomorrow”; the model may propose that inside the grammar. Night four then runs the accepted line with no model call. One fewer call is not a weaker LLM. It is proof that one judgment was distilled into a cheap personal rule.
 
 **Code owns time and safety. Nemotron owns personal strategy.** The insect never appears and never enters the prompt. The spine is: **observe → judge once → see the outcome → compress memory → compile a personal rule → ask less next time.**
+
+### 0.2 Logical model beats and runtime profiles
+
+Keep three terms separate:
+
+- A **model beat** is a point where the product calls `LLMClient.complete`.
+- A **remote call** is a model beat routed over HTTP instead of to `FakeLLM`.
+- A **paid attempt** is one HTTP request accepted by the provider. A remote
+  beat is paid at most once; malformed JSON then falls back locally. FakeLLM
+  still retries parse once.
+
+The full loop and the submission video have three model beats:
+
+1. **Pass A** for each trigger that survives hard gates and the personal filter.
+2. **Pass B** when that trigger's watch window closes.
+3. **Morning Update** after the night, to propose tomorrow's `filter_text`.
+
+“Every time needed” means every reached model beat calls the selected LLM
+client. It does not mean every human event calls a model. Gates, `ignore`, the
+one code-driven lamp upgrade, morning labels, clock clustering, and policy
+execution are deliberately model-free.
+
+Runtime profiles are deployment choices, not different product rules:
+
+- **Offline/local default:** all three beats use deterministic `FakeLLM`.
+- **Full remote scratch:** `--llm gemini` sends all three beat types remotely.
+  This is useful for development and is not the submission proof. It refuses
+  a public bind unless `NIGHTGUARD_ALLOW_PUBLIC_GEMINI=1` is explicitly set.
+- **Hosted submission demo:** `--llm nemotron` constructs one `RemoteLLM` with
+  `remote_kinds=("morning",)`. Pass A and Pass B use FakeLLM; Morning Update
+  uses NVIDIA Nemotron 3 Nano on Nebius Token Factory.
+- **Missing Nemotron key:** startup chooses FakeLLM for the whole page and
+  reports Backend `fake`.
+
+The hosted split is intentional credit control. It preserves the same loop and
+contracts while putting the sponsor-backed call on the clearest beat: noisy
+history becomes an executable rule, then the next night runs that rule without
+another model call.
+
+### 0.3 Billing, fallback, and what the cap does not promise
+
+`HourlyUsdCap` is a process-local UTC-hour purse. `claim()` gives one HTTP call
+the only in-flight seat; `settle()` adds the cost estimated from provider usage,
+with a small floor when usage is absent. A request needs at least `$0.001`
+remaining and model output is capped at 512 tokens. A smaller remainder means
+Backend `hour cap` and that model beat is completed by FakeLLM.
+
+Token Factory billing refusals such as HTTP 402 or `insufficient_quota` set
+`RemoteLLM.out_of_usage`. That request and later remote model beats in the same
+process use FakeLLM; Backend becomes `out of usage`. Ordinary network, HTTP 500,
+and unknown remote errors also finish the beat with FakeLLM. Backend becomes
+`remote error` and the System pane says `unknown network error; FakeLLM is used`
+or `unknown remote error; FakeLLM is used`. That flag is not sticky: the next
+remote beat tries Token Factory again.
+
+These are the exact limits of the current guardrail:
+
+- The `$0.02` hosted default is per UTC hour, not cumulative project spend.
+- State is in memory. Render sleep, deploy, or process restart resets both
+  `spent_usd` and `out_of_usage`.
+- Cost is settled after a reply. The `$0.001` reservation plus bounded prompt
+  and 512-token output prevents a tiny remainder from opening a full call.
+- A malformed but billable remote reply is not retried over HTTP. The beat
+  falls back locally and counts as parse-failed.
+- A billing or hour-cap fallback returns valid FakeLLM output, which may still
+  be accepted as a morning filter. `last_remote` is cleared so the System pane
+  does not keep showing the Token Factory URL for that fake beat.
+
+Therefore this cap limits ordinary in-process demo traffic; it is not the hard
+account-level stop-loss. Provider-side credit limits are authoritative.
+
+### 0.4 One public room
+
+The hosted UI is a single shared `UiSession`, not one private session per
+visitor. Every page polls `GET /session` every 2.5 seconds and sees the same
+night, memory, filter, and lamp.
+
+Writes carry a browser-generated `X-Operator-Token`, stored in `localStorage`.
+The first writer takes a three-minute idle lease. The same token refreshes it;
+another token receives `429 busy`. Reads remain open, and an in-flight write
+prevents takeover even if the lease clock reaches zero. Closing a tab does not
+release the seat immediately.
+
+`_WRITE` serializes mutations, while the operator lock protects lease state.
+`GET /session` takes the same mutation lock while copying a snapshot. Public
+Render also allows one successful Morning Update every 30 seconds and rejects
+JSON bodies over 64 KiB.
+This is presentation coordination, not user authentication: anyone who reaches
+a free seat can operate the shared demo and trigger Morning Update. It must not
+be described as multi-tenant isolation.
 
 ---
 
@@ -159,7 +249,7 @@ While the window is closed, `temp_c` is **indoor**. Any hit: no LLM, lamp off, *
 | `motion_type` is `leave_bed` | `Gated: leave_bed. No LLM.` |
 | `posture` is `lie_stable` and `motion_type` is `none` | `Gated: settled lie. Lights off. No LLM.` |
 | `motion_type` is not `scratch_burst` / `curl` / `sigh_shift` | `Gated: motion not a trigger. No LLM.` |
-| Night LLM already 6 (Pass A, Pass B, and their retries only) | `Gated: night llm budget. No LLM.` |
+| Night LLM already 6 (Pass A, Pass B, and local parse retries only) | `Gated: night llm budget. No LLM.` |
 
 **No pardon.** With no pending window, `sit` + `slap` does not open an assist lamp. The person is already up. Do not add noise.  
 `slow_roll` does not open Pass A. Inside an open window it is only low-intensity review material.
@@ -252,7 +342,10 @@ Five faces: `floor_left` / `floor_right` / `wall_head` / `wall_side` (left wall)
 
 ### 4.5 LLM parse and code overwrite
 
-Pure JSON, no markdown fences. Fail → retry once (retry counts toward the 6). Fail again: rule fallback, lamp off. Do not regex-scrape. The snapshot marks `last_step.llm_parse_failed` (program state, not a model field).
+Pure JSON, no markdown fences. A deterministic local client retries parse once
+(the retry counts toward the nightly 6). A remote beat makes one paid HTTP
+attempt; malformed JSON falls back immediately. Do not regex-scrape. The
+snapshot marks `last_step.llm_parse_failed` (program state, not a model field).
 
 `llm.py` must **not** `return json.loads(response)`. After a successful parse, `sanitize_pass_a(event, parsed)` must run before the loop sees it. A successful retry uses the same function.
 
@@ -352,7 +445,7 @@ If one event hits several lines, use the **first line in `filter_text`**. Later 
 
 Invariants:
 
-1. **The nightly 6 does not include the morning brief.** Count Pass A, Pass B, and those retries. The morning `brief` / `timeline` / `filter_text` call is separate. It cannot block a spent night, and it does not spend tomorrow night’s 6.
+1. **The nightly 6 does not include the morning brief.** Count Pass A, Pass B, and deterministic-client parse retries. A remote beat has one attempt. The morning `brief` / `timeline` / `filter_text` call is separate. It cannot block a spent night, and it does not spend tomorrow night’s 6.
 2. **`morning_label: not_mosquito` and `downweight` are not the same tier.** The first is lamp off in Pass A. The second still runs Pass A with a 0.3 cap and no `assist_search`. Do not swap them in the prompt or in tests.
 3. **One in-window upgrade, and only `off → on`.** If the first lamp was already on, or the person scratches again after an upgrade, close and Pass B. Do not change the lamp again. The upgrade is not an LLM call and not in the 6. Sit / leave never upgrade.
 4. **One remote client.** `RemoteLLM.complete(kind, payload)` is the same for every vendor. `LLM_PROVIDER=gemini|nemotron` only swaps the wire. Contract keys, the two opcodes, and the user-side `messages()` JSON do not change with the model. Default pytest does not HTTP. `NIGHTGUARD_REMOTE=1` hits Gemini.

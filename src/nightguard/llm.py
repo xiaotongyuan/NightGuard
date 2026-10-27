@@ -276,6 +276,21 @@ class FakeLLM:
         return default_pass_b_text(payload)
 
 
+def _pays_remote(client: object, kind: str) -> bool:
+    """True when the next complete() for this kind would open an HTTP bill."""
+    if not hasattr(client, "encode"):
+        return False
+    if getattr(client, "out_of_usage", False):
+        return False
+    kinds = getattr(client, "remote_kinds", None)
+    if kinds is not None and kind not in kinds:
+        return False
+    hourly = getattr(client, "hourly", None)
+    if hourly is not None and hourly.exhausted():
+        return False
+    return True
+
+
 def invoke(
     client: LLMClient,
     kind: str,
@@ -284,11 +299,12 @@ def invoke(
     active_filter: str = "none",
     complete: Callable[..., str] | None = None,
 ) -> tuple[dict, int, bool]:
-    """Parse, retry once, sanitize. Returns (obj, attempts, parse_failed)."""
+    """Parse, retry once locally, sanitize. A remote kind is not paid twice."""
     complete = complete or client.complete
     last_error: Exception | None = None
     attempts = 0
-    for _ in range(2):
+    tries = 1 if _pays_remote(client, kind) else 2
+    for _ in range(tries):
         attempts += 1
         raw = complete(kind, payload)
         try:

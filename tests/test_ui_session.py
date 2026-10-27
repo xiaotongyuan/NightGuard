@@ -63,6 +63,27 @@ def test_backend_label_hour_cap_is_not_out_of_usage():
     assert snap["llm"]["hourly"]["exhausted"] is True
 
 
+def test_backend_label_remote_error_is_not_out_of_usage():
+    from nightguard.adapter import RemoteLLM
+    from nightguard.ui_session import backend_label
+
+    llm = RemoteLLM(
+        provider="nemotron",
+        api_key="x",
+        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        base_url="https://example.invalid/v1",
+        remote_kinds=("morning",),
+        hourly_usd=0.10,
+        now_fn=lambda: 1000.0,
+    )
+    llm.last_fallback = "unknown network error; FakeLLM is used"
+    assert backend_label(llm) == "remote error"
+    assert llm.out_of_usage is False
+    snap = UiSession(llm=llm).snapshot()
+    assert snap["llm_backend"] == "remote error"
+    assert snap["llm"]["fallback"] == "unknown network error; FakeLLM is used"
+
+
 def test_W1_new_session_closed_only_openers():
     snap = UiSession().snapshot()
     assert snap["window"]["phase"] == "closed"

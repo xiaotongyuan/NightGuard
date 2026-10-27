@@ -8,7 +8,8 @@ Defaults (also in the design spec):
 
 - If several filter lines hit, use the first line in `filter_text`.
 - Pass B names the lamp under review and the four verdicts. `reason` must name `outcome_15min` and `later_posture` or `later_motion_type`. No mosquito audio. `left_bed` after a lamp-on is not fixed.
-- The nightly 6 counts Pass A, Pass B, and their retries. Morning is extra.
+- The nightly 6 counts Pass A, Pass B, and local parse retries. A remote beat
+  is paid once and falls back locally on malformed JSON. Morning is extra.
 - `morning_label: not_mosquito` turns the Pass A lamp off. `downweight` still runs Pass A and only caps `belief_p`. Do not swap the tiers.
 - Three traps (`design_spec` §4.10): **S4** before other scheduler cases; filters use regex + `clock_arc_min`, not `split()`; `json.loads` must be followed by `sanitize_pass_a` (**P5**).
 - The watch window has three phases. One upgrade, only `off→on`. Transitions in §0.1. No `on→off→on`.
@@ -166,7 +167,7 @@ A successful `json.loads` is not enough to return. Pass A must run `sanitize_pas
 | ID | Input | Assert |
 | --- | --- | --- |
 | P1 | flat Pass A JSON, legal enums | accept |
-| P2 | nested `action` object | fail; retry once; then lamp-off fallback and `llm_parse_failed` |
+| P2 | nested `action` object | local client retries once; remote client falls back after its one paid attempt; set `llm_parse_failed` |
 | P3 | model writes `aim=floor_right`, `body_zone=left_calf` | code rewrites `floor_left` |
 | P4 | `light=off` but `duration_s=4` | code sets `mode=none`, `brightness=none`, `duration_s=0`, `aim=none` |
 | P5 | `posture=lie_stable` but model `awake=true` | code sets `awake=false`. Handing the model field to the loop is a fail |
@@ -183,6 +184,7 @@ The fake model returns fixed legal JSON. Assert call counts and cards, not cleve
 | L3 | three “Pass A + immediate sit → Pass B”, then a scratch that should trigger | the 4th Pass A is budget-blocked (3×2=6). Do not write “seven Pass A in a row”: a scratch while the window is open only enters `follow_events` |
 | L4 | indoor 8°C scratch | LLM calls = 0 |
 | L5 | phase 1 `off` → phase 2 upgrade → phase 3 sit | LLM is still 1 Pass A + 1 Pass B; the upgrade is not in the budget |
+| L6 | Pass B client raises | close the watch window before surfacing the failure; write no partial card |
 
 ### 1.7 Live model (local twins, then remote)
 
@@ -198,14 +200,20 @@ Remote: `NIGHTGUARD_REMOTE=1 pytest tests/test_remote.py -m remote` (at most 3 H
 | A1 | local | `project_to_contract` strips fences and extra keys, keeps contract keys |
 | A2 | local | both `gemini` and `nemotron` wires `encode`; contract few-shot is the same. No HTTP |
 | A3 | local | error text has no API key |
-| A6 | local | fake HTTP 500 and a dead network. 500 becomes a key-free `RuntimeError`; dead network stays `URLError`. No real vendor |
-| H1 | local HTTP | dead network: `/play` returns 502 `llm_failed`; that response and the next `/session` have no key; window did not open |
+| A6 | local | fake HTTP 500 and a dead network surface key-free adapter errors. No real vendor |
+| A16 | local | wallet refuses a new HTTP claim when less than the `$0.001` call reserve remains |
+| A17 | local | a billing-marked HTTP 429 is not retried and sets `out_of_usage` |
+| A18 | local | a paid response with an empty provider envelope settles usage, then finishes with FakeLLM |
+| H1 | local HTTP | dead network: `/play` finishes with FakeLLM, Backend `remote error`, no key; the beat is applied |
 | H2 | local HTTP | while the operator seat is held, a second token’s writes are `429 busy`; `GET /session` still shows the current room |
 | H3 | local HTTP | after the lease expires, a second token can take over; the old operator’s next write is `429 busy` |
 | H4 | local HTTP | write without a token → `400 need_token`; room unchanged |
 | H5 | local HTTP | the same operator writing again refreshes the lease and is not kicked |
 | H6 | local HTTP | with a short `LEASE_SEC`, the next token takes over after real expiry |
 | H7 | local HTTP | a non-numeric `temp_c` is `400 bad_json`, not `502 llm_failed`; room temperature stays |
+| H8 | local HTTP | JSON body over 64 KiB is `413 request_too_large`; it does not take the operator seat |
+| H9 | local HTTP | a second Morning Update inside the configured cooldown is `429 morning_cooldown` |
+| H10 | local | Gemini refuses a public bind unless `NIGHTGUARD_ALLOW_PUBLIC_GEMINI=1` |
 | R1 | remote Gemini | same Pass A input, parseable flat JSON |
 | R2 | remote Gemini | `no_new_event` → `verdict=inconclusive` (the only pinned verdict on a live model) |
 | R3 | remote Gemini | no `peak_hz`, coordinates, `n_mosquitoes` |
