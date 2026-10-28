@@ -7,6 +7,7 @@ from typing import Any
 
 from nightguard.clock import forward_elapsed_min
 from nightguard.events import make_event
+from nightguard.example_walk import ExampleWalk
 from nightguard.filters import first_hit, parse_filter_line
 from nightguard.llm import FakeLLM, default_pass_a_text
 from nightguard.loop import NightLoop
@@ -206,6 +207,7 @@ class UiSession:
         pass_a_fixture: str = "default",
         filter_text: str = "none",
         llm: Any = None,
+        start_example: bool = False,
     ) -> None:
         if mode not in ("inspect", "continue"):
             mode = "inspect"
@@ -233,6 +235,9 @@ class UiSession:
         self.loop = NightLoop(llm=self.llm)
         self.loop.current_night = self.night_id
         self._install_preset_filter(filter_text)
+        self.example = ExampleWalk()
+        if start_example:
+            self.example.start()
 
     def _install_preset_filter(self, raw: str) -> None:
         """Already-accepted yesterday text: syntax only. Morning still uses accept."""
@@ -269,6 +274,7 @@ class UiSession:
         }
         self.last_llm_input = None
         self.last_llm_output = None
+        self.example.note("reset_night")
         return self.snapshot()
 
     def _advance_night(self, *, keep_llm: bool) -> None:
@@ -295,6 +301,7 @@ class UiSession:
 
     def next_night(self) -> dict:
         self._advance_night(keep_llm=False)
+        self.example.note("next_night")
         return self.snapshot()
 
     def set_ui(self, body: dict) -> dict:
@@ -325,6 +332,7 @@ class UiSession:
             self.t = event["t"]
             self.loop.on_event(event)
         self._record_step(choice_id, before_open, before_corrected, before_a, before_b)
+        self.example.note("play", choice_id)
         return self.snapshot()
 
     def morning(self, morning_label: str = "none", script_filter_text: str | None = None) -> dict:
@@ -362,6 +370,7 @@ class UiSession:
         }
         if self.loop.morning_done_night == closed_night:
             self._advance_night(keep_llm=True)
+        self.example.note("morning")
         return self.snapshot()
 
     def label(self, morning_label: str) -> dict:
@@ -567,4 +576,5 @@ class UiSession:
                 "filter_text": filt,
             },
             "morning": self.loop.last_morning,
+            "example": self.example.view(),
         }

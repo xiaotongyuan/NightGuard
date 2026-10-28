@@ -56,7 +56,8 @@ No WebSocket. One click, one request.
   "mode": "inspect",
   "temp_c": 26.4,
   "pass_a_fixture": "off",
-  "filter_text": "none"
+  "filter_text": "none",
+  "start_example": false
 }
 ```
 
@@ -66,6 +67,7 @@ No WebSocket. One click, one request.
 | `temp_c` | Written onto every later Event |
 | `filter_text` | Pre-set soft line. Syntax only (`parse_filter_line`). Illegal lines drop to `none`. Cluster checks wait for a real morning `accept_filter_text` |
 | `pass_a_fixture` | Pin FakeLLM Pass A, §6. Omit for the current FakeLLM default. Ignored when the process is running a real model |
+| `start_example` | If true, the new room starts the guided walk (`example.state=guiding`). Restart uses the same flag. A new session without it, after a walk that already started, keeps `example.state=left` |
 
 Morning FakeLLM: if yesterday already has a legal line, copy yesterday; if yesterday is `none` and a water clock habit exists, write `ignore ~01:55-02:15 motion sigh_shift`; if a `scratch_burst morning not_mosquito` habit exists, write `ignore motion scratch_burst`. Else `none`. `POST /morning` may still override once with `script_filter_text`.
 
@@ -123,6 +125,13 @@ Every write returns this object. The page draws only these keys. It does not inv
     "filter_text": "none"
   },
   "morning": null,
+  "example": {
+    "state": "idle",
+    "step": 0,
+    "message": "",
+    "button": "Start this example",
+    "highlight": {"choice_id": "", "select": false, "morning": false, "list_index": -1}
+  },
   "operator": {"held": false, "you": false, "seconds_left": 0}
 }
 ```

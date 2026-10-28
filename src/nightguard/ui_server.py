@@ -50,6 +50,7 @@ def _make_session(
     temp_c: float = 26.4,
     pass_a_fixture: str = "default",
     filter_text: str = "none",
+    start_example: bool = False,
 ) -> UiSession:
     return UiSession(
         mode=mode,
@@ -57,6 +58,7 @@ def _make_session(
         pass_a_fixture=pass_a_fixture if _LLM is None else "default",
         filter_text=filter_text,
         llm=_LLM,
+        start_example=start_example,
     )
 
 
@@ -237,12 +239,21 @@ class Handler(BaseHTTPRequestHandler):
     def _mutate(self, path: str, body: dict) -> dict:
         global _LAST_MORNING_AT
         if path == "/session":
+            start_example = bool(body.get("start_example"))
+            prev = _SESSION
             session = _make_session(
                 mode=str(body.get("mode") or "inspect"),
                 temp_c=_as_temp(body.get("temp_c", 26.4)),
                 pass_a_fixture=str(body.get("pass_a_fixture") or "default"),
                 filter_text=str(body.get("filter_text") or "none"),
+                start_example=start_example,
             )
+            if (
+                not start_example
+                and prev is not None
+                and prev.example.state != "idle"
+            ):
+                session.example.mark_left()
             return replace_session(session).snapshot()
         session = current_session()
         if path == "/play":

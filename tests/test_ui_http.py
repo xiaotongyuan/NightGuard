@@ -504,3 +504,56 @@ def test_nemotron_with_key_uses_nano(monkeypatch):
     assert getattr(llm, "provider", "") == "nemotron"
     assert getattr(llm, "remote_kinds", None) == frozenset({"morning"})
     assert label == "nano"
+
+
+def test_E12_http_start_example_and_new_session_leaves():
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, started = _post(
+            base,
+            "/session",
+            {"mode": "continue", "temp_c": 26.4, "filter_text": "none", "start_example": True},
+        )
+        assert status == 200
+        assert started["example"]["state"] == "guiding"
+        assert started["example"]["step"] == 0
+
+        status, polled = _get(base, "/session", token="solo")
+        assert status == 200
+        assert polled["example"]["state"] == "guiding"
+        assert polled["example"]["step"] == 0
+
+        status, sighed = _post(base, "/play", {"choice_id": "open.sigh.torso"})
+        assert status == 200
+        assert sighed["example"]["state"] == "guiding"
+        assert sighed["example"]["step"] == 1
+
+        status, replaced = _post(base, "/session", {"mode": "continue", "temp_c": 26.4})
+        assert status == 200
+        assert replaced["example"]["state"] == "left"
+        assert replaced["night_id"] == "n1"
+        assert replaced["memory"]["cards"] == []
+        assert replaced["example"]["highlight"]["list_index"] == -1
+
+        status, restart = _post(
+            base,
+            "/session",
+            {"mode": "continue", "temp_c": 26.4, "filter_text": "none", "start_example": True},
+        )
+        assert status == 200
+        assert restart["example"]["state"] == "guiding"
+        assert restart["example"]["step"] == 0
+        assert restart["example"]["message"] == "Next: sigh shift"
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()

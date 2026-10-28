@@ -49,7 +49,6 @@ const ERRORS = {
 };
 let feedback = "none";
 let busy = false;
-let exampleOn = false;
 let watchTimer = null;
 
 function operatorToken() {
@@ -263,53 +262,36 @@ function applySeat(snap) {
   }
 }
 
-function exampleCue(snap) {
-  const night = parseInt(String(snap.night_id).slice(1), 10) || 1;
-  const kind = snap.last_step.kind;
-  const choice = snap.last_step.choice_id;
-  if (night >= 4 && choice === "open.scratch.left_calf" && kind === "pass_a") {
-    return { text: "Example finished. The scratch asked for a judgment.", step: 4, done: true };
-  }
-  if (snap.window.open) {
-    return { text: "Next: leave bed (+1 min)", choice: "follow.leave.plus1", step: 1 };
-  }
-  if (night >= 4 && kind === "filtered") {
-    return { text: "Next: scratch left calf", choice: "open.scratch.left_calf", step: 4 };
-  }
-  if (night >= 4) {
-    return { text: "Next: sigh shift", choice: "open.sigh.torso", step: 4 };
-  }
-  if (kind === "pass_b" && night < 3) {
-    return { text: "Next: Time → next night", select: true, step: 2 };
-  }
-  if (kind === "pass_b" && night === 3) {
-    return { text: "Next: Update tomorrow's rules", morning: true, step: 3 };
-  }
-  return { text: "Next: sigh shift", choice: "open.sigh.torso", step: 0 };
-}
-
 function paintExample(snap) {
+  const ex = snap.example || {
+    state: "idle",
+    message: "",
+    button: "Start this example",
+    highlight: { choice_id: "", select: false, morning: false, list_index: -1 },
+  };
   const status = document.getElementById("example-status");
   const start = document.getElementById("btn-example");
+  const items = document.querySelectorAll(".example-steps li");
   for (const el of document.querySelectorAll(".next-cue")) el.classList.remove("next-cue");
-  for (const el of document.querySelectorAll(".example-steps li")) el.classList.remove("current");
-  start.classList.toggle("picked", exampleOn);
-  if (!exampleOn) {
+  for (const el of items) el.classList.remove("current");
+  start.textContent = ex.button || "Start this example";
+  start.classList.toggle("picked", ex.state === "guiding");
+  if (!ex.message) {
     status.textContent = "";
     status.hidden = true;
-    return;
+  } else {
+    status.hidden = false;
+    status.textContent = ex.message;
   }
-  const cue = exampleCue(snap);
-  status.hidden = false;
-  status.textContent = cue.text;
-  const items = document.querySelectorAll(".example-steps li");
-  if (items[cue.step]) items[cue.step].classList.add("current");
-  if (cue.choice) {
-    const btn = document.querySelector(`#choices button[data-choice="${cue.choice}"]`);
+  if (ex.state !== "guiding") return;
+  const hl = ex.highlight || {};
+  if (hl.list_index >= 0 && items[hl.list_index]) items[hl.list_index].classList.add("current");
+  if (hl.choice_id) {
+    const btn = document.querySelector(`#choices button[data-choice="${hl.choice_id}"]`);
     if (btn) btn.classList.add("next-cue");
   }
-  if (cue.select) document.getElementById("clock-mode").classList.add("next-cue");
-  if (cue.morning) document.getElementById("btn-morning").classList.add("next-cue");
+  if (hl.select) document.getElementById("clock-mode").classList.add("next-cue");
+  if (hl.morning) document.getElementById("btn-morning").classList.add("next-cue");
 }
 
 function paintFeedback() {
@@ -423,7 +405,6 @@ document.getElementById("btn-example").addEventListener("click", async () => {
     return;
   }
   setBusy(true, "working…");
-  exampleOn = true;
   feedback = "none";
   document.getElementById("temp").value = "26.4";
   try {
@@ -431,6 +412,7 @@ document.getElementById("btn-example").addEventListener("click", async () => {
       mode: "continue",
       temp_c: 26.4,
       filter_text: "none",
+      start_example: true,
     }));
   } catch (err) {
     document.getElementById("example-status").textContent = String(err);

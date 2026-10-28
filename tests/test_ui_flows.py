@@ -59,6 +59,11 @@ def assert_snapshot_legal(snap: dict) -> None:
     assert "mosquito_draw" not in text
     if snap["memory"]["cards"]:
         assert all("weight" not in line for line in snap["memory"]["cards"])
+    example = snap.get("example")
+    assert example is not None
+    assert example["state"] in {"idle", "guiding", "finished", "left"}
+    assert example["button"] in {"Start this example", "Restart this example"}
+    assert set(example["highlight"]) == {"choice_id", "select", "morning", "list_index"}
 
 
 def _water_night(session: UiSession) -> dict:

@@ -45,6 +45,7 @@ Buttons (all through the interface; the front end does not mutate NightLoop):
 - `next_night`: next `night_id`, same as a loop night advance. Also in the Time dropdown. Cards and filter stay
 - `morning`: window must be closed; run the morning brief (changes filter). Success auto-advances the night (same `_advance_night`). Cards and filter stay. The LLM pane still shows this morning JSON
 - Three labels: `mosquito` / `not_mosquito` / `unsure`. Stamp before Update; Update sends this `morning_label` onto the night just ended, then advances
+- **Start this example** / **Restart this example**: new room plus the guided walk. Snapshot `example` owns the status line and highlights. Off the script: stop highlighting, keep the room playable. Finished: keep the last room, no highlight. The page does not invent the next cue.
 
 ### 2.2 This-beat controls (only while the window is closed)
 
@@ -181,3 +182,4 @@ Live Gemini: `python -m nightguard.ui_server --llm gemini --model gemini-3.5-fla
 - Send mosquito position, coordinates, or counts to the model
 - Reimplement gates / filter / `elapsed_min` in the browser
 - Treat a canned click list as product rules. A demo sequence may cite testplan C1–C8. That list is not the nightly 6-call budget
+- Invent the next example highlight. `example` on the snapshot is the source
