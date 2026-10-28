@@ -65,10 +65,9 @@ separate.
 
 The public web demo is built for that cheaper routing profile: Pass A and Pass
 B stay on deterministic FakeLLM; **Update tomorrow's rules** is the only beat
-that can call Nemotron. Through November 30 the hosted key is unset, so the
-live URL runs entirely on FakeLLM. After the December 1 redeploy, Morning
-Update is the paid call. Dates and labels are under [Model
-availability](#model-availability).
+that can call Nemotron. The hosted key is set, so that beat is the paid call.
+If the key is missing, the page still boots on FakeLLM. Labels are under
+[Model availability](#model-availability).
 
 The exact state machine, prompt contracts, filter grammar, and sanitization
 rules live in [the design spec](docs/design_spec.md).
@@ -79,12 +78,11 @@ rules live in [the design spec](docs/design_spec.md).
 
 ### Model availability
 
-- **Through November 30:** the public host has no `NEMOTRON_API_KEY`, so the
-  page runs entirely on deterministic FakeLLM.
-- **December 1–15 public testing:** the key will be enabled in the Render
-  dashboard and the service redeployed. **Update tomorrow's rules** will then
-  call Nemotron; night Pass A and Pass B will remain FakeLLM to protect the
+- The public host has `NEMOTRON_API_KEY` set. **Update tomorrow's rules**
+  calls Nemotron; night Pass A and Pass B stay on FakeLLM to protect the
   sponsored credits.
+- Confirm on the page: Backend should say `nano`. `fake` means this process
+  started without the key.
 - After public testing, the hosted key will be removed.
 
 The Backend label is the source of truth for the current deployment.
