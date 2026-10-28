@@ -10,7 +10,35 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 
 from nightguard import ui_server
+from nightguard.llm import WATER_IGNORE, FakeLLM
 from nightguard.ui_session import UiError
+
+
+class _NanoLikeMorning(FakeLLM):
+    """Hosted path: morning is remote-shaped and may write downweight, not ignore."""
+
+    provider = "nemotron"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.last_remote = None
+        self.last_fallback = None
+
+    def complete(self, kind: str, payload: dict) -> str:
+        if kind == "morning":
+            self.calls.append((kind, payload))
+            self.last_remote = {
+                "url": "https://api.tokenfactory.nebius.com/v1/chat/completions",
+                "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+            }
+            return json.dumps(
+                {
+                    "brief": "Clock habit is mixed.",
+                    "timeline": "none",
+                    "filter_text": "downweight ~02:00-03:00 motion sigh_shift",
+                }
+            )
+        return super().complete(kind, payload)
 
 
 def _headers(token: str | None = None) -> dict[str, str]:
@@ -504,6 +532,148 @@ def test_nemotron_with_key_uses_nano(monkeypatch):
     assert getattr(llm, "provider", "") == "nemotron"
     assert getattr(llm, "remote_kinds", None) == frozenset({"morning"})
     assert label == "nano"
+
+
+def test_E2_http_walks_original_example_flow():
+    """Same clicks as the page. After night 4 sigh, scratch must stay clickable."""
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    ui_server._SESSION = None
+    ui_server._LLM = None
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, snap = _post(
+            base,
+            "/session",
+            {"mode": "continue", "temp_c": 26.4, "filter_text": "none", "start_example": True},
+        )
+        assert status == 200
+        assert snap["example"]["state"] == "guiding"
+        assert snap["example"]["highlight"]["choice_id"] == "open.sigh.torso"
+        assert "open.sigh.torso" in snap["enabled_choices"]
+
+        nights = (("n1", "pass_b", "Next: Time → next night"), ("n2", "pass_b", "Next: Time → next night"))
+        for night_id, _kind, next_msg in nights:
+            assert snap["night_id"] == night_id
+            status, snap = _post(base, "/play", {"choice_id": "open.sigh.torso"})
+            assert status == 200
+            assert snap["last_step"]["kind"] == "pass_a"
+            assert snap["window"]["open"] is True
+            assert snap["example"]["highlight"]["choice_id"] == "follow.leave.plus1"
+            assert "follow.leave.plus1" in snap["enabled_choices"]
+            assert "open.scratch.left_calf" in snap["disabled_choices"]
+
+            status, snap = _post(base, "/play", {"choice_id": "follow.leave.plus1"})
+            assert status == 200
+            assert snap["last_step"]["kind"] == _kind
+            assert snap["window"]["open"] is False
+            assert snap["example"]["message"] == next_msg
+            assert snap["example"]["highlight"]["select"] is True
+
+            status, snap = _post(base, "/next-night", {})
+            assert status == 200
+            assert snap["example"]["highlight"]["choice_id"] == "open.sigh.torso"
+
+        assert snap["night_id"] == "n3"
+        status, snap = _post(base, "/play", {"choice_id": "open.sigh.torso"})
+        assert status == 200
+        status, snap = _post(base, "/play", {"choice_id": "follow.leave.plus1"})
+        assert status == 200
+        assert snap["example"]["highlight"]["morning"] is True
+        assert snap["window"]["open"] is False
+
+        status, snap = _post(base, "/morning", {"morning_label": "none"})
+        assert status == 200
+        assert snap["night_id"] == "n4"
+        assert snap["memory"]["filter_text"] == "ignore ~01:55-02:15 motion sigh_shift"
+        assert snap["example"]["message"] == "Next: sigh shift"
+        assert snap["example"]["highlight"]["choice_id"] == "open.sigh.torso"
+        assert "open.sigh.torso" in snap["enabled_choices"]
+
+        status, snap = _post(base, "/play", {"choice_id": "open.sigh.torso"})
+        assert status == 200
+        assert snap["last_step"]["kind"] == "filtered"
+        assert snap["window"]["open"] is False
+        assert snap["example"]["state"] == "guiding"
+        assert snap["example"]["message"] == "Next: scratch left calf"
+        assert snap["example"]["highlight"]["choice_id"] == "open.scratch.left_calf"
+        assert "open.scratch.left_calf" in snap["enabled_choices"]
+        assert "open.scratch.left_calf" not in snap["disabled_choices"]
+
+        status, snap = _post(base, "/play", {"choice_id": "open.scratch.left_calf"})
+        assert status == 200
+        assert snap["last_step"]["kind"] == "pass_a"
+        assert snap["example"]["state"] == "finished"
+        assert snap["example"]["highlight"]["choice_id"] == ""
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
+
+
+def test_E14_http_nano_like_morning_pins_ignore_and_hides_remote_on_restart():
+    saved_session, saved_llm = ui_server._SESSION, ui_server._LLM
+    llm = _NanoLikeMorning()
+    ui_server._SESSION = None
+    ui_server._LLM = llm
+    ui_server.reset_operator()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        status, snap = _post(
+            base,
+            "/session",
+            {"mode": "continue", "temp_c": 26.4, "filter_text": "none", "start_example": True},
+        )
+        assert status == 200
+        assert snap["llm_backend"] == "nano"
+        assert snap["llm"]["remote"] is None
+        for _ in range(3):
+            status, snap = _post(base, "/play", {"choice_id": "open.sigh.torso"})
+            assert status == 200
+            status, snap = _post(base, "/play", {"choice_id": "follow.leave.plus1"})
+            assert status == 200
+            if snap["night_id"] != "n3":
+                status, snap = _post(base, "/next-night", {})
+                assert status == 200
+        status, snap = _post(base, "/morning", {"morning_label": "none"})
+        assert status == 200
+        assert snap["llm_backend"] == "nano"
+        assert snap["llm"]["output"]["filter_text"].startswith("downweight")
+        assert snap["memory"]["filter_text"] == WATER_IGNORE
+        assert snap["llm"]["remote"]["model"] == "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+        status, snap = _post(base, "/play", {"choice_id": "open.sigh.torso"})
+        assert status == 200
+        assert snap["last_step"]["kind"] == "filtered"
+        assert snap["window"]["open"] is False
+        assert snap["example"]["highlight"]["choice_id"] == "open.scratch.left_calf"
+        assert "open.scratch.left_calf" in snap["enabled_choices"]
+        status, snap = _post(base, "/play", {"choice_id": "open.scratch.left_calf"})
+        assert status == 200
+        assert snap["example"]["state"] == "finished"
+        status, snap = _post(
+            base,
+            "/session",
+            {"mode": "continue", "temp_c": 26.4, "filter_text": "none", "start_example": True},
+        )
+        assert status == 200
+        assert snap["night_id"] == "n1"
+        assert snap["llm"]["input"] is None
+        assert snap["llm"]["remote"] is None
+        assert snap["example"]["message"] == "Next: sigh shift"
+    finally:
+        server.shutdown()
+        server.server_close()
+        ui_server._SESSION = saved_session
+        ui_server._LLM = saved_llm
+        ui_server.reset_operator()
 
 
 def test_E12_http_start_example_and_new_session_leaves():

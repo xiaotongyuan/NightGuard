@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from nightguard.example_walk import (
     FINISHED_MESSAGE,
     LEFT_MESSAGE,
@@ -10,10 +12,32 @@ from nightguard.example_walk import (
     START_BUTTON,
     ExampleWalk,
 )
-from nightguard.llm import WATER_IGNORE
+from nightguard.llm import WATER_IGNORE, FakeLLM
 from nightguard.ui_session import UiSession
 
 from tests.test_ui_flows import assert_snapshot_legal
+
+
+class _DownweightMorning(FakeLLM):
+    def complete(self, kind: str, payload: dict) -> str:
+        if kind == "morning":
+            self.calls.append((kind, payload))
+            return json.dumps(
+                {
+                    "brief": "Clock habit is mixed.",
+                    "timeline": "none",
+                    "filter_text": "downweight ~01:55-02:15 motion sigh_shift",
+                }
+            )
+        return super().complete(kind, payload)
+
+
+def _walk_to_morning(session: UiSession) -> None:
+    for _ in range(3):
+        session.play("open.sigh.torso")
+        session.play("follow.leave.plus1")
+        if session.night_id != "n3":
+            session.next_night()
 
 
 def _highlight(snap: dict) -> dict:
@@ -69,6 +93,9 @@ def test_E2_happy_path_cues_then_finishes():
         assert snap["example"]["message"] == message
         assert _highlight(snap)["choice_id"] == next_choice
         assert_snapshot_legal(snap)
+    assert snap["last_step"]["kind"] == "filtered"
+    assert snap["window"]["open"] is False
+    assert "open.scratch.left_calf" in snap["enabled_choices"]
     snap = session.play("open.scratch.left_calf")
     assert snap["example"]["state"] == "finished"
     assert snap["example"]["message"] == FINISHED_MESSAGE
@@ -122,7 +149,19 @@ def test_E5_restart_clears_room_and_guides_again():
     assert snap["memory"]["cards"] == []
     assert snap["memory"]["filter_text"] == "none"
     assert snap["example"]["message"] == "Next: sigh shift"
+    leftover = FakeLLM()
+    leftover.last_remote = {
+        "url": "https://api.tokenfactory.nebius.com/v1/chat/completions",
+        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+    }
+    leftover.last_fallback = None
+    restart = UiSession(mode="continue", start_example=True, llm=leftover)
+    cleared = restart.snapshot()
+    assert cleared["night_id"] == "n1"
+    assert cleared["llm"]["input"] is None
+    assert cleared["llm"]["remote"] is None
     assert_snapshot_legal(snap)
+    assert_snapshot_legal(cleared)
 
 
 def test_E6_label_and_temp_do_not_leave():
@@ -182,6 +221,26 @@ def test_E9_next_night_instead_of_morning_leaves():
     assert snap["example"]["state"] == "left"
     assert snap["night_id"] == "n4"
     assert snap["memory"]["filter_text"] == "none"
+    assert_snapshot_legal(snap)
+
+
+def test_E13_example_morning_pins_ignore_so_night4_scratch_stays_open():
+    session = UiSession(mode="continue", start_example=True, llm=_DownweightMorning())
+    _walk_to_morning(session)
+    snap = session.morning()
+    assert snap["memory"]["filter_text"] == WATER_IGNORE
+    assert snap["llm"]["output"]["filter_text"].startswith("downweight")
+    assert snap["example"]["message"] == "Next: sigh shift"
+    snap = session.play("open.sigh.torso")
+    assert snap["last_step"]["kind"] == "filtered"
+    assert snap["example"]["state"] == "guiding"
+    assert snap["example"]["message"] == "Next: scratch left calf"
+    assert _highlight(snap)["choice_id"] == "open.scratch.left_calf"
+    assert "open.scratch.left_calf" in snap["enabled_choices"]
+    assert snap["window"]["open"] is False
+    snap = session.play("open.scratch.left_calf")
+    assert snap["example"]["state"] == "finished"
+    assert snap["last_step"]["kind"] == "pass_a"
     assert_snapshot_legal(snap)
 
 

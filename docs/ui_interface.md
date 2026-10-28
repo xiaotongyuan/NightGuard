@@ -67,7 +67,7 @@ No WebSocket. One click, one request.
 | `temp_c` | Written onto every later Event |
 | `filter_text` | Pre-set soft line. Syntax only (`parse_filter_line`). Illegal lines drop to `none`. Cluster checks wait for a real morning `accept_filter_text` |
 | `pass_a_fixture` | Pin FakeLLM Pass A, §6. Omit for the current FakeLLM default. Ignored when the process is running a real model |
-| `start_example` | If true, the new room starts the guided walk (`example.state=guiding`). Restart uses the same flag. A new session without it, after a walk that already started, keeps `example.state=left` |
+| `start_example` | If true, the new room starts the guided walk (`example.state=guiding`). Restart uses the same flag. A new session without it, after a walk that already started, keeps `example.state=left`. The scripted morning still calls the model, then pins `ignore ~01:55-02:15 motion sigh_shift` so night 4 sigh is skipped even if Nano wrote `downweight` |
 
 Morning FakeLLM: if yesterday already has a legal line, copy yesterday; if yesterday is `none` and a water clock habit exists, write `ignore ~01:55-02:15 motion sigh_shift`; if a `scratch_burst morning not_mosquito` habit exists, write `ignore motion scratch_burst`. Else `none`. `POST /morning` may still override once with `script_filter_text`.
 

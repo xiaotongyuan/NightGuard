@@ -7,9 +7,9 @@ from typing import Any
 
 from nightguard.clock import forward_elapsed_min
 from nightguard.events import make_event
-from nightguard.example_walk import ExampleWalk
+from nightguard.example_walk import SCRIPT, ExampleWalk
 from nightguard.filters import first_hit, parse_filter_line
-from nightguard.llm import FakeLLM, default_pass_a_text
+from nightguard.llm import WATER_IGNORE, FakeLLM, default_pass_a_text
 from nightguard.loop import NightLoop
 from nightguard.memory import recent_high_weight_cards, render_card_line, render_memory_text
 from nightguard.schema import (
@@ -239,6 +239,17 @@ class UiSession:
         if start_example:
             self.example.start()
 
+    def _example_morning_due(self) -> bool:
+        if self.example.state != "guiding" or self.example.step >= len(SCRIPT):
+            return False
+        return SCRIPT[self.example.step][0] == "morning"
+
+    def _pin_example_water_ignore(self) -> None:
+        """Example night 4 needs ignore, not Nano downweight. Downweight still opens Pass A."""
+        self.loop.accept_morning_filter(WATER_IGNORE)
+        if self.loop.filter_text != WATER_IGNORE:
+            self.loop.filter_text = WATER_IGNORE
+
     def _install_preset_filter(self, raw: str) -> None:
         """Already-accepted yesterday text: syntax only. Morning still uses accept."""
         if not raw or raw == "none":
@@ -344,11 +355,14 @@ class UiSession:
         if morning_label in ("mosquito", "not_mosquito", "unsure"):
             self.loop.apply_morning_label(closed_night, morning_label)
         before = self.loop.filter_text
+        pin_water = script_filter_text is None and self._example_morning_due()
         if script_filter_text is not None:
             self.llm.morning_override = script_filter_text
         out = self.loop.run_morning_brief(morning_label=morning_label)
         if out is None:
             raise UiError(self.loop.morning_refused or "morning_refused", 409)
+        if pin_water:
+            self._pin_example_water_ignore()
         after = self.loop.filter_text
         self.soft_diff = _soft_diff(before, after)
         payload = None
@@ -558,7 +572,7 @@ class UiSession:
             "llm": {
                 "input": self.last_llm_input,
                 "output": self.last_llm_output,
-                "remote": getattr(self.llm, "last_remote", None),
+                "remote": getattr(self.llm, "last_remote", None) if self.last_llm_input else None,
                 "hourly": self.llm.hourly.status() if getattr(self.llm, "hourly", None) else None,
                 "fallback": getattr(self.llm, "last_fallback", None),
             },

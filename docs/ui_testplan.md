@@ -138,15 +138,18 @@ Page chrome. `example` on the snapshot is the only source. The front end does no
 | --- | --- | --- |
 | E0 | new session | `example.state=idle`; Start button; no highlight |
 | E1 | `start_example` | `guiding`; Next: sigh shift; highlight `open.sigh.torso` |
-| E2 | the 11 scripted clicks | each cue matches the next script beat; last scratch → `finished`; no highlight |
+| E2 | the 11 scripted clicks (HTTP same as the page) | each cue matches the next script beat; night 4 sigh is `filtered` and scratch stays enabled; last scratch → `finished`; no highlight |
 | E3 | more clicks after finished | state stays `finished`; room still records the extra move |
 | E4 | first click is scratch | `left`; no highlight; room still plays |
-| E5 | `start_example` after left | new room; `guiding` from step 0 |
+| E5 | `start_example` after left | new room; `guiding` from step 0; leftover `llm.remote` is hidden |
 | E6 | label or temp while guiding | still `guiding` |
 | E7 | reset / early next night / early morning | `left` |
 | E8 | wait 15 or a second sigh on night 1 | `left` |
 | E9 | next night instead of morning | `left`; filter still `none` |
 | E12 | HTTP start, GET poll, then `/session` without the flag | poll does not advance the step; replacement session is `left` |
+| E13 | scripted morning returns `downweight` for the water clock | accepted filter is still `ignore ~01:55-02:15 motion sigh_shift`; night 4 sigh is `filtered`; scratch stays enabled |
+| E14 | HTTP with a Nano-shaped morning (`downweight ~02:00-03:00` + leftover `last_remote`) | same night-4 contract as E2; Restart hides `llm.remote` |
+| E15 | live Token Factory morning (`NIGHTGUARD_NEMOTRON=1`) | same pin and scratch-enabled contract; default pytest skips |
 
 Restart is `POST /session` with `start_example: true`.
 
