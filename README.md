@@ -108,7 +108,7 @@ take about a minute.
 The hosted purse is `$0.02` per UTC hour. This is a demo guardrail, **not a
 lifetime spending limit**: the counter is held in memory, a process restart
 resets it, and a new UTC hour opens a new purse. A request starts only while at
-least `$0.001` remains, output is capped at 512 tokens, and a remote Morning
+least `$0.001` remains, output is capped at 2048 tokens, and a remote Morning
 Update is one paid HTTP call. Invalid JSON falls back locally. Provider-side
 credit limits remain the real hard stop.
 

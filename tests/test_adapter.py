@@ -47,8 +47,9 @@ def test_A2_gemini_and_nemotron_encode_same_contract():
     assert "Return exactly these keys" in n.body["messages"][1]["content"]
     assert "Example:" not in g.body["contents"][0]["parts"][0]["text"]
     assert "Example:" not in n.body["messages"][1]["content"]
-    assert g.body["generationConfig"]["maxOutputTokens"] == 512
-    assert n.body["max_tokens"] == 512
+    assert g.body["generationConfig"]["maxOutputTokens"] == 2048
+    assert n.body["max_tokens"] == 2048
+    assert n.body["chat_template_kwargs"] == {"enable_thinking": False}
     assert encode_gemini is gemini.spec.encode
 
 
@@ -168,6 +169,20 @@ def test_A3_errors_redact_api_key():
         extract_openai({"choices": []})
     except RuntimeError as exc:
         assert "empty" in str(exc)
+    reasoned = extract_openai(
+        {"choices": [{"message": {"content": "", "reasoning_content": '{"brief":"x"}'}}]}
+    )
+    assert reasoned == '{"brief":"x"}'
+    assert (
+        extract_openai({"choices": [{"message": {"content": '{"brief":"from content"}', "reasoning_content": "{"}}]})
+        == '{"brief":"from content"}'
+    )
+    try:
+        extract_openai({"choices": [{"message": {"content": None, "reasoning": "just thinking"}}]})
+    except RuntimeError as exc:
+        assert "empty" in str(exc)
+    else:
+        raise AssertionError("prose scratch notes must not become the answer")
 
 
 def _openai_ok(content: str, prompt: int = 1000, completion: int = 80) -> dict:
@@ -414,7 +429,7 @@ def test_A13_fake_fallback_clears_last_remote(monkeypatch):
 
 
 def test_A14_remote_morning_bad_json_is_not_paid_twice(monkeypatch):
-    from nightguard.llm import fallback_morning, invoke
+    from nightguard.llm import invoke
 
     hits = {"n": 0}
 
@@ -446,8 +461,9 @@ def test_A14_remote_morning_bad_json_is_not_paid_twice(monkeypatch):
     out, attempts, failed = invoke(llm, "morning", payload, {})
     assert hits["n"] == 1
     assert attempts == 1
-    assert failed is True
-    assert out == fallback_morning(payload)
+    assert failed is False
+    assert llm.last_fallback == "unknown remote error; FakeLLM is used"
+    assert out["filter_text"] == "none"
 
 
 def test_A15_http_500_uses_fake_and_is_not_sticky(monkeypatch):

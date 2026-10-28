@@ -11,7 +11,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Callable
 
-from nightguard.llm import FakeLLM
+from nightguard.llm import FakeLLM, parse_morning_json, parse_pass_a_json, parse_pass_b_json
 from nightguard.prompts import (
     MORNING_FILTER_GRAMMAR,
     MORNING_SYSTEM,
@@ -38,7 +38,7 @@ class HttpRequest:
 
 EncodeFn = Callable[[str, str, str, str, str], HttpRequest]
 ExtractFn = Callable[[dict], str]
-MAX_OUTPUT_TOKENS = 512
+MAX_OUTPUT_TOKENS = 2048
 
 
 @dataclass(frozen=True)
@@ -180,6 +180,7 @@ def encode_openai(system: str, user: str, api_key: str, model: str, base_url: st
             "model": model,
             "temperature": 0.1,
             "max_tokens": MAX_OUTPUT_TOKENS,
+            "chat_template_kwargs": {"enable_thinking": False},
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -188,14 +189,46 @@ def encode_openai(system: str, user: str, api_key: str, model: str, base_url: st
     )
 
 
+def _field_text(value: object) -> str:
+    if isinstance(value, str) and value.strip():
+        return value
+    if isinstance(value, list):
+        parts = [part.get("text", "") for part in value if isinstance(part, dict)]
+        joined = "".join(parts)
+        if joined.strip():
+            return joined
+    return ""
+
+
+def _looks_json_object(text: str) -> bool:
+    return text.lstrip().startswith("{")
+
+
 def extract_openai(payload: dict) -> str:
+    """Prefer the answer box. Scratch notes are only a JSON-shaped last resort."""
     choices = payload.get("choices") or []
     if not choices:
         raise RuntimeError("remote empty")
-    text = choices[0].get("message", {}).get("content") or ""
-    if not text:
-        raise RuntimeError("remote empty")
-    return text
+    message = choices[0].get("message") or {}
+    content = _field_text(message.get("content"))
+    if content:
+        return content
+    scratch = _field_text(message.get("reasoning_content")) or _field_text(message.get("reasoning"))
+    if scratch and _looks_json_object(scratch):
+        return scratch
+    raise RuntimeError("remote empty")
+
+
+def require_contract(kind: str, raw: str) -> str:
+    """Project, then parse. Scratch prose must not become a successful remote beat."""
+    projected = project_to_contract(kind, raw)
+    if kind == "pass_a":
+        parse_pass_a_json(projected)
+    elif kind == "morning":
+        parse_morning_json(projected)
+    else:
+        parse_pass_b_json(projected)
+    return projected
 
 
 PROVIDERS: dict[str, ProviderSpec] = {
@@ -473,9 +506,9 @@ class RemoteLLM:
                     claimed = False
                 raw = self.spec.extract(body)
                 try:
-                    projected = project_to_contract(kind, raw)
-                except (ValueError, TypeError, json.JSONDecodeError):
-                    projected = raw
+                    projected = require_contract(kind, raw)
+                except (ValueError, TypeError, json.JSONDecodeError, RuntimeError):
+                    return self._use_fake(kind, payload, "unknown remote error; FakeLLM is used")
             except Exception as exc:
                 if isinstance(exc, RuntimeError) and is_out_of_usage(str(exc)):
                     self.out_of_usage = True

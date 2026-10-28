@@ -74,7 +74,7 @@ another model call.
 `HourlyUsdCap` is a process-local UTC-hour purse. `claim()` gives one HTTP call
 the only in-flight seat; `settle()` adds the cost estimated from provider usage,
 with a small floor when usage is absent. A request needs at least `$0.001`
-remaining and model output is capped at 512 tokens. A smaller remainder means
+remaining and model output is capped at 2048 tokens. A smaller remainder means
 Backend `hour cap` and that model beat is completed by FakeLLM.
 
 Token Factory billing refusals such as HTTP 402 or `insufficient_quota` set
@@ -91,7 +91,7 @@ These are the exact limits of the current guardrail:
 - State is in memory. Render sleep, deploy, or process restart resets both
   `spent_usd` and `out_of_usage`.
 - Cost is settled after a reply. The `$0.001` reservation plus bounded prompt
-  and 512-token output prevents a tiny remainder from opening a full call.
+  and 2048-token output prevents a tiny remainder from opening a full call.
 - A malformed but billable remote reply is not retried over HTTP. The beat
   falls back locally and counts as parse-failed.
 - A billing or hour-cap fallback returns valid FakeLLM output, which may still

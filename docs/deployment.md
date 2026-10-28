@@ -28,7 +28,7 @@ python -m nightguard.ui_server --llm nemotron
 tomorrow's rules** hits Token Factory. Night Pass A / Pass B stay FakeLLM. The
 hour purse is `$0.02` on the UTC hour; leftover dies at the hour and does not
 carry. A request requires at least `$0.001` remaining and model output is capped
-at 512 tokens. A call claimed in one hour and settled after the hour is billed
+at 2048 tokens. A call claimed in one hour and settled after the hour is billed
 to the **new** hour. The wallet takes one in-flight seat so two threads cannot
 both HTTP. When the purse is empty the page Backend says `hour cap` (not `out of
 usage`). The key never appears in the page, the snapshot, or an error body.
