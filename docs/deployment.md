@@ -11,7 +11,7 @@ Do not publish a home `8765` port. Local is for you. A public demo is a hosted p
 | Command | Backend |
 | --- | --- |
 | `python -m nightguard.ui_server` | FakeLLM. Default. Offline. |
-| `python -m nightguard.ui_server --llm nemotron` | Only morning Update hits Nano. Pass A / Pass B stay FakeLLM |
+| `python -m nightguard.ui_server --llm nemotron` | Only morning Update hits Nemotron 3.5 Lightning. Pass A / Pass B stay FakeLLM |
 | `python -m nightguard.ui_server --llm gemini --model gemini-3.5-flash-lite` | Local scratch only. Not submission proof |
 
 Bind: `http://127.0.0.1:8765/` loopback only.
@@ -54,7 +54,7 @@ The page is `python -m nightguard.ui_server` plus `web/`, not Gradio or Streamli
 | Hugging Face Docker / Gradio | Paid to create as of 2026-10. Skip |
 | Hugging Face Static | No. No Python backend |
 
-`render.yaml` starts `--llm nemotron`. The dashboard secret is set, so morning **Update tomorrow's rules** hits Nano; night Pass A / Pass B stay FakeLLM. Page Backend says `nano` when the key is in the process. No key → `fake`. `hour cap` is this UTC hour’s `$0.02` spent. `out of usage` is a refused Token Factory bill.
+`render.yaml` starts `--llm nemotron`. The dashboard secret is set, so morning **Update tomorrow's rules** hits `nvidia/Nemotron-3_5-Lightning`; night Pass A / Pass B stay FakeLLM. Page Backend says `nano` when the key is in the process. No key → `fake`. `hour cap` is this UTC hour’s `$0.02` spent. `out of usage` is a refused Token Factory bill.
 
 Render sets a 30-second global cooldown between successful Morning Updates and
 rejects JSON request bodies over 64 KiB. These controls limit casual public
@@ -69,7 +69,7 @@ The free instance sleeps after about 15 idle minutes. The first open can take ab
 
 | Item | Decision |
 | --- | --- |
-| Default inference | `--llm nemotron`. Morning Update hits Nano. Night stays local |
+| Default inference | `--llm nemotron`. Morning Update hits Lightning. Night stays local |
 | Refresh | `GET` the current room. Do not `POST /session` on every open |
 | Reset | **Start this example** is the only full-room reset |
 | Seat | One operator. Same browser = same token = same seat. Every page refreshes the shared room every 2.5s. Writes send `X-Operator-Token`. A second writer gets `429 busy` and can only watch. Idle 3 minutes releases the seat |

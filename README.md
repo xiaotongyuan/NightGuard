@@ -12,7 +12,7 @@ The lamp is a judgment, not a reading light. Please do not read in bed and then
 file a bug when it judges you.
 
 Hackathon track: **Best Apps and Agents** (Nebius × NVIDIA). The submission uses
-**NVIDIA Nemotron 3 Nano 30B-A3B** on **Nebius Token Factory**.
+**NVIDIA Nemotron 3.5 Lightning** on **Nebius Token Factory**.
 
 ![NightGuard three-pane page](docs/UI_outlook.png)
 

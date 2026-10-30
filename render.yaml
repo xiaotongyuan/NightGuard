@@ -15,7 +15,7 @@ services:
       - key: PYTHONPATH
         value: src
       - key: NEMOTRON_MODEL
-        value: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
+        value: nvidia/Nemotron-3_5-Lightning
       - key: NEMOTRON_BASE_URL
         value: https://api.tokenfactory.nebius.com/v1
       - key: NIGHTGUARD_HOURLY_USD

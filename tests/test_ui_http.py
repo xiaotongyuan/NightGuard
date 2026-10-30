@@ -29,7 +29,7 @@ class _NanoLikeMorning(FakeLLM):
             self.calls.append((kind, payload))
             self.last_remote = {
                 "url": "https://api.tokenfactory.nebius.com/v1/chat/completions",
-                "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+                "model": "nvidia/Nemotron-3_5-Lightning",
             }
             return json.dumps(
                 {
@@ -135,7 +135,7 @@ def test_http_billing_falls_back_and_says_out_of_usage(monkeypatch):
     ui_server._LLM = RemoteLLM(
         provider="nemotron",
         api_key=key,
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
@@ -185,7 +185,7 @@ def test_http_remote_outage_uses_fake_without_leaking_the_key(monkeypatch):
     ui_server._LLM = RemoteLLM(
         provider="nemotron",
         api_key=key,
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), ui_server.Handler)
@@ -648,7 +648,7 @@ def test_E14_http_nano_like_morning_pins_ignore_and_hides_remote_on_restart():
         assert snap["llm_backend"] == "nano"
         assert snap["llm"]["output"]["filter_text"].startswith("downweight")
         assert snap["memory"]["filter_text"] == WATER_IGNORE
-        assert snap["llm"]["remote"]["model"] == "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+        assert snap["llm"]["remote"]["model"] == "nvidia/Nemotron-3_5-Lightning"
         status, snap = _post(base, "/play", {"choice_id": "open.sigh.torso"})
         assert status == 200
         assert snap["last_step"]["kind"] == "filtered"

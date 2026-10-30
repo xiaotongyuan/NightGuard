@@ -27,7 +27,7 @@ def test_A2_gemini_and_nemotron_encode_same_contract():
     nemotron = RemoteLLM(
         provider="nemotron",
         api_key="secret-key",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
     )
     payload = {"night_id": "n2"}
@@ -40,7 +40,7 @@ def test_A2_gemini_and_nemotron_encode_same_contract():
     assert n.headers["Authorization"] == "Bearer secret-key"
     assert nemotron.last_remote == {
         "url": n.url,
-        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "model": "nvidia/Nemotron-3_5-Lightning",
     }
     assert "secret-key" not in json.dumps(nemotron.last_remote)
     assert "Return exactly these keys" in g.body["contents"][0]["parts"][0]["text"]
@@ -85,7 +85,7 @@ def test_A6_http_failure_stays_local_and_redacts_the_key(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key=key,
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
     )
     req = llm.encode("morning", {"night_id": "n1"})
@@ -133,7 +133,7 @@ def test_A7_billing_refusal_uses_fake_and_stops_calling(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key=key,
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
     )
     remote_calls = {"n": 0}
@@ -230,7 +230,7 @@ def test_A8_nemotron_page_only_remotes_morning(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key="secret-key-value",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,
@@ -278,7 +278,7 @@ def test_A9_hourly_cap_expires_and_does_not_carry(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key="secret-key-value",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,
@@ -340,7 +340,7 @@ def test_A11_urlerror_releases_the_wallet_seat(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key="secret-key-value",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,
@@ -401,7 +401,7 @@ def test_A13_fake_fallback_clears_last_remote(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key="secret-key-value",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,
@@ -414,7 +414,7 @@ def test_A13_fake_fallback_clears_last_remote(monkeypatch):
     llm2 = RemoteLLM(
         provider="nemotron",
         api_key="secret-key-value",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,
@@ -451,7 +451,7 @@ def test_A14_remote_morning_bad_json_is_not_paid_twice(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key="secret-key-value",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,
@@ -500,7 +500,7 @@ def test_A15_http_500_uses_fake_and_is_not_sticky(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key="secret-key-value",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,
@@ -530,7 +530,7 @@ def test_A17_billing_429_is_not_retried(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key="secret-key-value",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
     )
 
@@ -567,7 +567,7 @@ def test_A18_empty_remote_envelope_uses_fake_after_settlement(monkeypatch):
     llm = RemoteLLM(
         provider="nemotron",
         api_key="secret-key-value",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,

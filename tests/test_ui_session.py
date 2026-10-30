@@ -31,7 +31,7 @@ def test_backend_label_is_nano_until_usage_runs_out():
     llm = RemoteLLM(
         provider="nemotron",
         api_key="x",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
     )
     assert backend_label(llm) == "nano"
@@ -48,7 +48,7 @@ def test_backend_label_hour_cap_is_not_out_of_usage():
     llm = RemoteLLM(
         provider="nemotron",
         api_key="x",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,
@@ -70,7 +70,7 @@ def test_backend_label_remote_error_is_not_out_of_usage():
     llm = RemoteLLM(
         provider="nemotron",
         api_key="x",
-        model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
         remote_kinds=("morning",),
         hourly_usd=0.10,

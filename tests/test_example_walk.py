@@ -152,7 +152,7 @@ def test_E5_restart_clears_room_and_guides_again():
     leftover = FakeLLM()
     leftover.last_remote = {
         "url": "https://api.tokenfactory.nebius.com/v1/chat/completions",
-        "model": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        "model": "nvidia/Nemotron-3_5-Lightning",
     }
     leftover.last_fallback = None
     restart = UiSession(mode="continue", start_example=True, llm=leftover)

@@ -246,7 +246,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         name="nemotron",
         key_env="NEMOTRON_API_KEY",
         model_env="NEMOTRON_MODEL",
-        default_model="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
+        default_model="nvidia/Nemotron-3_5-Lightning",
         base_url_env="NEMOTRON_BASE_URL",
         default_base="",
         encode=encode_openai,
@@ -290,7 +290,7 @@ def is_out_of_usage(message: str) -> bool:
     return any(marker in text for marker in _OUT_OF_USAGE_MARKERS)
 
 
-# Token Factory list price for nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B.
+# Token Factory list price for nvidia/Nemotron-3_5-Lightning.
 NANO_USD_PER_1M_INPUT = 0.06
 NANO_USD_PER_1M_OUTPUT = 0.24
 # If the vendor omits usage, still count something so a tight loop cannot stay free.

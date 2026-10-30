@@ -60,7 +60,7 @@ Runtime profiles are deployment choices, not different product rules:
   a public bind unless `NIGHTGUARD_ALLOW_PUBLIC_GEMINI=1` is explicitly set.
 - **Hosted submission demo:** `--llm nemotron` constructs one `RemoteLLM` with
   `remote_kinds=("morning",)`. Pass A and Pass B use FakeLLM; Morning Update
-  uses NVIDIA Nemotron 3 Nano on Nebius Token Factory.
+  uses NVIDIA Nemotron 3.5 Lightning on Nebius Token Factory.
 - **Missing Nemotron key:** startup chooses FakeLLM for the whole page and
   reports Backend `fake`.
 

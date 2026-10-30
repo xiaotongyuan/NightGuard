@@ -295,7 +295,7 @@ def wire_llm(kind: str, model: str = "") -> tuple[object | None, str]:
     if not (os.getenv("NEMOTRON_API_KEY") or "").strip():
         print("NEMOTRON_API_KEY missing; using FakeLLM", flush=True)
         return None, "fake"
-    chosen = model or os.getenv("NEMOTRON_MODEL") or "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
+    chosen = model or os.getenv("NEMOTRON_MODEL") or "nvidia/Nemotron-3_5-Lightning"
     hourly = float(os.getenv("NIGHTGUARD_HOURLY_USD") or "0.02")
     llm = RemoteLLM(
         provider="nemotron",
