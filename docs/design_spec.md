@@ -74,7 +74,8 @@ another model call.
 `HourlyUsdCap` is a process-local UTC-hour purse. `claim()` gives one HTTP call
 the only in-flight seat; `settle()` adds the cost estimated from provider usage,
 with a small floor when usage is absent. A request needs at least `$0.001`
-remaining and model output is capped at 2048 tokens. A smaller remainder means
+remaining, model output is capped at 2048 tokens, and the HTTP wait is 75
+seconds. A smaller remainder means
 Backend `hour cap` and that model beat is completed by FakeLLM.
 
 Token Factory billing refusals such as HTTP 402 or `insufficient_quota` set

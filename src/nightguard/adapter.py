@@ -39,6 +39,7 @@ class HttpRequest:
 EncodeFn = Callable[[str, str, str, str, str], HttpRequest]
 ExtractFn = Callable[[dict], str]
 MAX_OUTPUT_TOKENS = 2048
+HTTP_TIMEOUT_S = 75
 
 
 @dataclass(frozen=True)
@@ -421,7 +422,7 @@ def call_http(req: HttpRequest, api_key: str, retry_http: tuple[int, ...] = (429
             method="POST",
         )
         try:
-            with urllib.request.urlopen(http_req, timeout=45) as resp:
+            with urllib.request.urlopen(http_req, timeout=HTTP_TIMEOUT_S) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             err = exc.read().decode("utf-8", errors="replace")[:240]

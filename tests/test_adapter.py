@@ -4,7 +4,14 @@ import io
 import json
 import urllib.error
 
-from nightguard.adapter import RemoteLLM, call_http, encode_gemini, extract_openai, project_to_contract
+from nightguard.adapter import (
+    HTTP_TIMEOUT_S,
+    RemoteLLM,
+    call_http,
+    encode_gemini,
+    extract_openai,
+    project_to_contract,
+)
 from nightguard.schema import PASS_A_MODEL_KEYS
 
 
@@ -50,6 +57,7 @@ def test_A2_gemini_and_nemotron_encode_same_contract():
     assert g.body["generationConfig"]["maxOutputTokens"] == 2048
     assert n.body["max_tokens"] == 2048
     assert n.body["chat_template_kwargs"] == {"enable_thinking": False}
+    assert HTTP_TIMEOUT_S == 75
     assert encode_gemini is gemini.spec.encode
 
 

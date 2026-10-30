@@ -108,8 +108,8 @@ take about a minute.
 The hosted purse is `$0.02` per UTC hour. This is a demo guardrail, **not a
 lifetime spending limit**: the counter is held in memory, a process restart
 resets it, and a new UTC hour opens a new purse. A request starts only while at
-least `$0.001` remains, output is capped at 2048 tokens, and a remote Morning
-Update is one paid HTTP call. Invalid JSON falls back locally. Provider-side
+least `$0.001` remains, output is capped at 2048 tokens, a remote Morning
+Update waits up to 75 seconds, and that beat is one paid HTTP call. Invalid JSON falls back locally. Provider-side
 credit limits remain the real hard stop.
 
 No key on Render means `--llm nemotron` immediately falls back to FakeLLM, so
