@@ -36,7 +36,7 @@ def test_E15_live_nano_example_morning_keeps_night4_scratch_open():
     assert llm.last_fallback is None
     assert llm.last_remote is not None
     assert llm.last_usage is not None
-    assert snap["llm_backend"] == "nano"
+    assert snap["llm_backend"] == "lightning"
     assert snap["memory"]["filter_text"] == WATER_IGNORE
     assert snap["llm"]["output"]["filter_text"]
     assert snap["llm"]["remote"]["model"]

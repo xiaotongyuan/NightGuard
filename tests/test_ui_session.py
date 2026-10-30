@@ -34,9 +34,9 @@ def test_backend_label_is_nano_until_usage_runs_out():
         model="nvidia/Nemotron-3_5-Lightning",
         base_url="https://example.invalid/v1",
     )
-    assert backend_label(llm) == "nano"
+    assert backend_label(llm) == "lightning"
     session = UiSession(llm=llm)
-    assert session.snapshot()["llm_backend"] == "nano"
+    assert session.snapshot()["llm_backend"] == "lightning"
     llm.out_of_usage = True
     assert session.snapshot()["llm_backend"] == "out of usage"
 

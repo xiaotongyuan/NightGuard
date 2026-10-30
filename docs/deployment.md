@@ -54,7 +54,7 @@ The page is `python -m nightguard.ui_server` plus `web/`, not Gradio or Streamli
 | Hugging Face Docker / Gradio | Paid to create as of 2026-10. Skip |
 | Hugging Face Static | No. No Python backend |
 
-`render.yaml` starts `--llm nemotron`. The dashboard secret is set, so morning **Update tomorrow's rules** hits `nvidia/Nemotron-3_5-Lightning`; night Pass A / Pass B stay FakeLLM. Page Backend says `nano` when the key is in the process. No key → `fake`. `hour cap` is this UTC hour’s `$0.02` spent. `out of usage` is a refused Token Factory bill.
+`render.yaml` starts `--llm nemotron`. The dashboard secret is set, so morning **Update tomorrow's rules** hits `nvidia/Nemotron-3_5-Lightning`; night Pass A / Pass B stay FakeLLM. Page Backend says `lightning` when the key is in the process. No key → `fake`. `hour cap` is this UTC hour’s `$0.02` spent. `out of usage` is a refused Token Factory bill.
 
 Render sets a 30-second global cooldown between successful Morning Updates and
 rejects JSON request bodies over 64 KiB. These controls limit casual public
@@ -74,7 +74,7 @@ The free instance sleeps after about 15 idle minutes. The first open can take ab
 | Reset | **Start this example** is the only full-room reset |
 | Seat | One operator. Same browser = same token = same seat. Every page refreshes the shared room every 2.5s. Writes send `X-Operator-Token`. A second writer gets `429 busy` and can only watch. Idle 3 minutes releases the seat |
 | Paid-update throttle | Successful Morning Updates are at least 30 seconds apart on Render |
-| Backend label | `nano` when the key is set; `fake` if the secret is missing; `hour cap`, `out of usage`, or `remote error` when those fire |
+| Backend label | `lightning` when the key is set; `fake` if the secret is missing; `hour cap`, `out of usage`, or `remote error` when those fire |
 | Do not | one session per visitor, visitor-supplied keys, port-forward, ngrok as the demo URL |
 
 ### Render (free web service)
@@ -84,7 +84,7 @@ The free instance sleeps after about 15 idle minutes. The first open can take ab
 3. [render.com](https://render.com) → sign in with GitHub. No card.
 4. **New → Blueprint**, pick `xiaotongyuan/NightGuard`. Or **New → Web Service** on the same repo; Render reads `render.yaml`.
 5. Plan: **Free**. Do not set `PORT`.
-6. Wait for the log: `NightGuard UI  http://0.0.0.0:<port>/  llm=nano`. Then open the page: Backend must say `nano`. Missing key prints `NEMOTRON_API_KEY missing; using FakeLLM` and `llm=fake`. Add the secret and redeploy. The page still opens either way.
+6. Wait for the log: `NightGuard UI  http://0.0.0.0:<port>/  llm=lightning`. Then open the page: Backend must say `lightning`. Missing key prints `NEMOTRON_API_KEY missing; using FakeLLM` and `llm=fake`. Add the secret and redeploy. The page still opens either way.
 7. Live URL: [https://nightguard-h18y.onrender.com/](https://nightguard-h18y.onrender.com/). Same address on Devpost and in this README.
 
 ---

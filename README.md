@@ -81,7 +81,7 @@ rules live in [the design spec](docs/design_spec.md).
 - The public host has `NEMOTRON_API_KEY` set. **Update tomorrow's rules**
   calls Nemotron; night Pass A and Pass B stay on FakeLLM to protect the
   sponsored credits.
-- Confirm on the page: Backend should say `nano`. `fake` means this process
+- Confirm on the page: Backend should say `lightning`. `fake` means this process
   started without the key.
 - After public testing, the hosted key will be removed.
 
@@ -97,7 +97,7 @@ take about a minute.
 
 ### What the Backend label means
 
-- `nano` — Morning Update can call Nemotron.
+- `lightning` — Morning Update can call Nemotron 3.5 Lightning.
 - `fake` — no `NEMOTRON_API_KEY` was available; the whole page uses FakeLLM.
 - `hour cap` — this process spent its configured UTC-hour purse.
 - `out of usage` — Token Factory refused billing; later calls in this process

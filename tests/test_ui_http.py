@@ -531,7 +531,7 @@ def test_nemotron_with_key_uses_nano(monkeypatch):
     assert llm is not None
     assert getattr(llm, "provider", "") == "nemotron"
     assert getattr(llm, "remote_kinds", None) == frozenset({"morning"})
-    assert label == "nano"
+    assert label == "lightning"
 
 
 def test_E2_http_walks_original_example_flow():
@@ -633,7 +633,7 @@ def test_E14_http_nano_like_morning_pins_ignore_and_hides_remote_on_restart():
             {"mode": "continue", "temp_c": 26.4, "filter_text": "none", "start_example": True},
         )
         assert status == 200
-        assert snap["llm_backend"] == "nano"
+        assert snap["llm_backend"] == "lightning"
         assert snap["llm"]["remote"] is None
         for _ in range(3):
             status, snap = _post(base, "/play", {"choice_id": "open.sigh.torso"})
@@ -645,7 +645,7 @@ def test_E14_http_nano_like_morning_pins_ignore_and_hides_remote_on_restart():
                 assert status == 200
         status, snap = _post(base, "/morning", {"morning_label": "none"})
         assert status == 200
-        assert snap["llm_backend"] == "nano"
+        assert snap["llm_backend"] == "lightning"
         assert snap["llm"]["output"]["filter_text"].startswith("downweight")
         assert snap["memory"]["filter_text"] == WATER_IGNORE
         assert snap["llm"]["remote"]["model"] == "nvidia/Nemotron-3_5-Lightning"

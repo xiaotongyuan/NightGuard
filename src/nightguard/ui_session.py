@@ -177,7 +177,7 @@ def _gate_id(reasoning: str) -> str:
 
 
 def backend_label(llm: Any) -> str:
-    """Page word. fake, nano, gemini, hour cap, out of usage, or remote error."""
+    """Page word. fake, lightning, gemini, hour cap, out of usage, or remote error."""
     if getattr(llm, "out_of_usage", False):
         return "out of usage"
     hourly = getattr(llm, "hourly", None)
@@ -187,7 +187,7 @@ def backend_label(llm: Any) -> str:
         return "remote error"
     provider = getattr(llm, "provider", "") or ""
     if provider == "nemotron":
-        return "nano"
+        return "lightning"
     if provider == "gemini":
         return "gemini"
     return "fake"
